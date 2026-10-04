@@ -1,0 +1,69 @@
+# MySQL database tier.
+#
+# For this BEGINNER DEMO we run MySQL as a Deployment with emptyDir storage.
+#   - emptyDir = temporary storage tied to the pod's lifetime.
+#   - If the pod restarts, the data is LOST. Fine for a demo, NOT for production.
+#
+# In production you'd use a StatefulSet + PersistentVolume, or a managed
+# database service (e.g., Amazon RDS / Cloud SQL) instead.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_NAME
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: DB_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: DB_PASSWORD
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-data
+          emptyDir: {}          # temporary storage (demo only)
+---
+# Service: gives MySQL a stable in-cluster name "mysql".
+# ClusterIP (default) = reachable only inside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: demo
+spec:
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306

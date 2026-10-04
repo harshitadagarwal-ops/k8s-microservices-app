@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K8s Demo App</title>
+    <style>
+        :root { --brand: #326ce5; }  /* Kubernetes blue */
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; background: #f4f6fb; color: #1c2333;
+        }
+        header {
+            background: var(--brand); color: #fff; padding: 24px 32px;
+        }
+        header h1 { margin: 0; font-size: 22px; }
+        header p { margin: 4px 0 0; opacity: .9; font-size: 13px; }
+        main { max-width: 680px; margin: 32px auto; padding: 0 16px; }
+        .card {
+            background: #fff; border-radius: 12px; padding: 24px;
+            box-shadow: 0 4px 20px rgba(30,50,90,.08); margin-bottom: 20px;
+        }
+        form { display: flex; gap: 10px; }
+        input[type=text] {
+            flex: 1; padding: 12px 14px; border: 1px solid #d3d9e6;
+            border-radius: 8px; font-size: 15px;
+        }
+        button {
+            background: var(--brand); color: #fff; border: 0; padding: 12px 20px;
+            border-radius: 8px; font-size: 15px; cursor: pointer;
+        }
+        button:hover { filter: brightness(1.05); }
+        ul { list-style: none; padding: 0; margin: 0; }
+        li {
+            padding: 12px 14px; border-bottom: 1px solid #eef1f7;
+            display: flex; justify-content: space-between;
+        }
+        li:last-child { border-bottom: 0; }
+        .time { color: #8a93a6; font-size: 12px; }
+        .error {
+            background: #fff3f3; border: 1px solid #ffd0d0; color: #a12020;
+            padding: 12px 14px; border-radius: 8px; font-size: 14px;
+        }
+        .meta { color: #8a93a6; font-size: 12px; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Kubernetes Demo App</h1>
+        <p>Frontend (Flask) &rarr; Backend (Flask REST API) &rarr; MySQL</p>
+    </header>
+    <main>
+        <div class="card">
+            <form action="/add" method="post">
+                <input type="text" name="text" placeholder="Type a message..." required>
+                <button type="submit">Add</button>
+            </form>
+        </div>
+
+        {% if error %}
+        <div class="card">
+            <div class="error">{{ error }}</div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <h3 style="margin-top:0;">Messages</h3>
+            {% if messages %}
+            <ul>
+                {% for m in messages %}
+                <li>
+                    <span>{{ m.text }}</span>
+                    <span class="time">{{ m.created_at }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p style="color:#8a93a6;">No messages yet. Add one above.</p>
+            {% endif %}
+            <div class="meta">Backend: {{ backend_url }}</div>
+        </div>
+    </main>
+</body>
+</html>
