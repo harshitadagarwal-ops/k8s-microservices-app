@@ -1,4 +1,4 @@
-# K8s Microservices Class — Demo Runbook
+# K8s Microservices — Demo Runbook
 
 A 3-tier demo app for teaching **Deploying Microservices on Kubernetes** to beginners.
 
