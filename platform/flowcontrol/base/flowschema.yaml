@@ -1,0 +1,22 @@
+# Routes read traffic from reporting service accounts to the batch-reporting level.
+apiVersion: flowcontrol.apiserver.k8s.io/v1beta3
+kind: FlowSchema
+metadata:
+  name: batch-reporting
+spec:
+  priorityLevelConfiguration:
+    name: batch-reporting
+  matchingPrecedence: 2000
+  distinguisherMethod:
+    type: ByUser
+  rules:
+    - subjects:
+        - kind: ServiceAccount
+          serviceAccount:
+            name: report-client
+            namespace: reporting
+      resourceRules:
+        - verbs: ["get", "list", "watch"]
+          apiGroups: [""]
+          resources: ["*"]
+          namespaces: ["*"]

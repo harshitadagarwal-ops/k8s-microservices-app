@@ -1,0 +1,13 @@
+# Audit policy: record which clients read service discovery objects.
+apiVersion: audit.k8s.io/v1
+kind: Policy
+omitStages:
+  - RequestReceived
+rules:
+  - level: Metadata
+    resources:
+      - group: ""
+        resources: ["endpoints"]
+      - group: "discovery.k8s.io"
+        resources: ["endpointslices"]
+  - level: None

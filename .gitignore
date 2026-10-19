@@ -1,0 +1,16 @@
+
+# Harness VS Code extension — MCP configs may contain API keys
+.mcp.json
+.vscode/mcp.json
+
+# Harness delegate manifest — contains the delegate token
+harness-delegate.yaml
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Terraform working files (lock files are committed)
+.terraform/
+*.tfstate
+*.tfstate.*

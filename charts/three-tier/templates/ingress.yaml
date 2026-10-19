@@ -1,0 +1,35 @@
+{{- $i := .Values.ingress }}
+{{- if $i.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend
+  labels:
+    {{- include "three-tier.labels" . | nindent 4 }}
+  annotations:
+    {{- if and $i.tls.enabled $i.tls.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ $i.tls.clusterIssuer }}
+    {{- end }}
+    {{- with $i.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ $i.className }}
+  {{- if $i.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $i.host }}
+      secretName: frontend-tls
+  {{- end }}
+  rules:
+    - host: {{ $i.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: {{ .Values.frontend.port }}
+{{- end }}

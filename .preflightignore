@@ -1,0 +1,22 @@
+# Paths the Preflight agent must not read when scanning this repo.
+# Same syntax as .gitignore.
+
+# Answer key, validation and proposal docs
+preflight/
+ci/
+PREFLIGHT_AGENT_README.md
+
+# Beginner runbook and its plain manifests (the Helm chart is the source of truth)
+README.md
+CONTENT.md
+manifests/
+diagrams/
+
+# Application source code
+frontend/
+backend/
+
+# Local and generated files
+.terraform/
+*.tfstate*
+harness-delegate.yaml

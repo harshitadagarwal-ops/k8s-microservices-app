@@ -1,0 +1,52 @@
+# Defaults shared by every environment. Per-env files override these.
+
+image:
+  registry: ""            # empty = image loaded directly into the cluster
+  pullPolicy: IfNotPresent
+
+frontend:
+  image: frontend
+  tag: "1.0.0"
+  replicas: 2
+  port: 8080
+  service:
+    type: ClusterIP
+    nodePort: null
+
+backend:
+  image: backend
+  tag: "1.0.0"
+  replicas: 2
+  port: 5000
+
+mysql:
+  image: mysql:8.0
+  replicas: 1
+  database: appdb
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""      # empty = cluster default
+  pdb:
+    enabled: false
+    minAvailable: 1
+
+auth:
+  # Demo credentials only. Real environments set these from a secret store.
+  rootPassword: rootpassword
+  user: appuser
+  password: apppassword
+
+serviceAccount:
+  create: true
+  name: three-tier
+  annotations: {}
+
+ingress:
+  enabled: true
+  className: nginx
+  host: three-tier.local
+  annotations: {}
+  tls:
+    enabled: false
+    clusterIssuer: ""

@@ -1,0 +1,19 @@
+# dev-aks: Azure Kubernetes Service, westeurope.
+
+image:
+  registry: exampledevacr.azurecr.io/three-tier
+
+frontend:
+  replicas: 1
+
+backend:
+  replicas: 1
+
+mysql:
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: managed-csi
+
+ingress:
+  host: three-tier.dev.example.com

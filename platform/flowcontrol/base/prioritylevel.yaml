@@ -1,0 +1,16 @@
+# Keeps batch reporting traffic from starving interactive API requests.
+apiVersion: flowcontrol.apiserver.k8s.io/v1beta3
+kind: PriorityLevelConfiguration
+metadata:
+  name: batch-reporting
+spec:
+  type: Limited
+  limited:
+    nominalConcurrencyShares: 10
+    lendablePercent: 50
+    limitResponse:
+      type: Queue
+      queuing:
+        queues: 16
+        handSize: 4
+        queueLengthLimit: 50
