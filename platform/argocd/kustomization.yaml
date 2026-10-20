@@ -1,0 +1,26 @@
+# F05: Argo CD pinned to v2.14.0
+# v2.14.0 is tested on Kubernetes 1.28 to 1.31.
+# It is already outside the tested range on K8s 1.32+.
+# Upgrade to 1.36 requires a two-step jump:
+# Step 1: Argo CD v3.4 (tested on 1.32 to 1.35)
+# Step 2: Argo CD v3.5 (tested on 1.33 to 1.36)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.14.0/manifests/install.yaml
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: argocd-cm
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cm
+      data:
+        application.instanceLabelKey: argocd.argoproj.io/instance
+        admin.enabled: "true"

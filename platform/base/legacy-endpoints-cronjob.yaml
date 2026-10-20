@@ -1,0 +1,53 @@
+# F07: Legacy report client querying core/v1 Endpoints API every 5 minutes.
+# Endpoints API is deprecated in Kubernetes 1.33 in favor of discovery.k8s.io/v1 EndpointSlices.
+# Generates live warnings in apiserver_requested_deprecated_apis metric.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: legacy-report-client-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: legacy-endpoints-reader
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: legacy-endpoints-reader-binding
+subjects:
+  - kind: ServiceAccount
+    name: legacy-report-client-sa
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: legacy-endpoints-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: legacy-endpoints-report
+  namespace: default
+spec:
+  schedule: "*/5 * * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: legacy-report-client-sa
+          restartPolicy: OnFailure
+          containers:
+            - name: endpoints-reporter
+              image: bitnami/kubectl:1.32.0
+              command:
+                - /bin/sh
+                - -c
+                - "kubectl get endpoints --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.name}{\" \"}{.subsets[*].addresses[*].ip}{\"\\n\"}{end}'"

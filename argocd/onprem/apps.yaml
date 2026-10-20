@@ -1,0 +1,94 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: three-tier-app-onprem
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/example-org/k8s-microservices-app.git
+    targetRevision: HEAD
+    path: charts/three-tier
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-onprem.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-onprem
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/example-org/k8s-microservices-app.git
+    targetRevision: HEAD
+    path: platform/overlays/onprem
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+# F04: cert-manager pinned to v1.16.2
+# Supported on K8s 1.25 to 1.32. Breaks at hop 1.33.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://charts.jetstack.io
+    targetRevision: v1.16.2
+    chart: cert-manager
+    helm:
+      values: |
+        crds:
+          enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+# F06: ingress-nginx chart 4.11.3 / controller v1.11.3
+# Ingress NGINX project officially retired in March 2026.
+# Controller v1.11 support table ends at Kubernetes 1.30.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ingress-nginx
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes.github.io/ingress-nginx
+    targetRevision: 4.11.3
+    chart: ingress-nginx
+    helm:
+      values: |
+        controller:
+          replicaCount: 1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ingress-nginx
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

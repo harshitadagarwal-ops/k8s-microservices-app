@@ -1,0 +1,30 @@
+# Kind cluster configuration for onprem demo environment
+# F03: Pinned by digest to kindest/node:v1.32.0 (built with kind v0.26.0).
+# This image runs containerd v1.7.24.
+# Containderd 1.x support is removed in Kubernetes 1.36.
+# Upgrading to 1.36 requires moving to a node image built with containerd 2.0+ (kind v0.27.0+).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.32.0@sha256:c48c62eac5da28cdadcf560d1d8616cfa6783b500d210632703dfda36470b057
+    kubeadmConfigPatches:
+      - |
+        kind: ClusterConfiguration
+        apiServer:
+          extraArgs:
+            runtime-config: "flowcontrol.apiserver.k8s.io/v1=true"
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 8080
+        protocol: TCP
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+  - role: worker
+    image: kindest/node:v1.32.0@sha256:c48c62eac5da28cdadcf560d1d8616cfa6783b500d210632703dfda36470b057
+  - role: worker
+    image: kindest/node:v1.32.0@sha256:c48c62eac5da28cdadcf560d1d8616cfa6783b500d210632703dfda36470b057

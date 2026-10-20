@@ -1,0 +1,14 @@
+{{- if .Values.mysql.pdb.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mysql-pdb
+  labels:
+    app: mysql
+    {{- include "three-tier.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.mysql.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app: mysql
+{{- end }}
