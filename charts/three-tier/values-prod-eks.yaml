@@ -1,0 +1,26 @@
+# prod-eks: Amazon EKS, eu-west-1.
+
+image:
+  registry: 111122223333.dkr.ecr.eu-west-1.amazonaws.com/three-tier
+
+frontend:
+  replicas: 3
+
+backend:
+  replicas: 3
+
+mysql:
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: gp3
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::111122223333:role/three-tier-backend
+
+ingress:
+  host: three-tier.prod.example.com
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt-prod

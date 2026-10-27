@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: three-tier-app-prod-eks
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/example-org/k8s-microservices-app.git
+    targetRevision: HEAD
+    path: charts/three-tier
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod-eks.yaml
+  destination:
+    server: https://eks-prod.us-east-1.eks.amazonaws.com
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-prod-eks
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/example-org/k8s-microservices-app.git
+    targetRevision: HEAD
+    path: platform/overlays/prod-eks
+  destination:
+    server: https://eks-prod.us-east-1.eks.amazonaws.com
+    namespace: default
+---
+# F04: cert-manager v1.16.2
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-prod-eks
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://charts.jetstack.io
+    targetRevision: v1.16.2
+    chart: cert-manager
+    helm:
+      values: |
+        crds:
+          enabled: true
+  destination:
+    server: https://eks-prod.us-east-1.eks.amazonaws.com
+    namespace: cert-manager
+---
+# F06: ingress-nginx chart 4.11.3
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ingress-nginx-prod-eks
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes.github.io/ingress-nginx
+    targetRevision: 4.11.3
+    chart: ingress-nginx
+  destination:
+    server: https://eks-prod.us-east-1.eks.amazonaws.com
+    namespace: ingress-nginx

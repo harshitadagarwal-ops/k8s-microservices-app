@@ -1,0 +1,110 @@
+{{- $m := .Values.mysql }}
+{{- if $m.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-data
+  labels:
+    {{- include "three-tier.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if $m.persistence.storageClass }}
+  storageClassName: {{ $m.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $m.persistence.size }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+    {{- include "three-tier.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $m.replicas }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: {{ $m.image }}
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_NAME
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: DB_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: DB_PASSWORD
+          readinessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-data
+          {{- if $m.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: mysql-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    {{- include "three-tier.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+{{- if $m.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mysql
+  labels:
+    {{- include "three-tier.labels" . | nindent 4 }}
+spec:
+  {{- if hasKey $m.pdb "maxUnavailable" }}
+  maxUnavailable: {{ $m.pdb.maxUnavailable }}
+  {{- else }}
+  minAvailable: {{ $m.pdb.minAvailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: mysql
+{{- end }}

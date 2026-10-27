@@ -1,0 +1,69 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: three-tier-app-staging-gke
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/example-org/k8s-microservices-app.git
+    targetRevision: HEAD
+    path: charts/three-tier
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-staging-gke.yaml
+  destination:
+    server: https://gke-staging.us-central1.gke.goog
+    namespace: demo
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-staging-gke
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/example-org/k8s-microservices-app.git
+    targetRevision: HEAD
+    path: platform/overlays/staging-gke
+  destination:
+    server: https://gke-staging.us-central1.gke.goog
+    namespace: default
+---
+# F04: cert-manager v1.16.2
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-staging-gke
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://charts.jetstack.io
+    targetRevision: v1.16.2
+    chart: cert-manager
+    helm:
+      values: |
+        crds:
+          enabled: true
+  destination:
+    server: https://gke-staging.us-central1.gke.goog
+    namespace: cert-manager
+---
+# F06: ingress-nginx chart 4.11.3
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ingress-nginx-staging-gke
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes.github.io/ingress-nginx
+    targetRevision: 4.11.3
+    chart: ingress-nginx
+  destination:
+    server: https://gke-staging.us-central1.gke.goog
+    namespace: ingress-nginx

@@ -1,0 +1,82 @@
+# MySQL database tier — EKS version.
+#
+# Difference from manifests/02-mysql.yaml (Minikube):
+#   Minikube uses emptyDir (data lost on pod restart). On EKS we use a real
+#   PersistentVolumeClaim backed by the default gp3 StorageClass (EBS), so the
+#   data survives pod restarts. The EBS CSI driver provisions the volume.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-data
+  namespace: demo
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp3          # default StorageClass created by the EKS Terraform
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: demo
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate               # a single EBS volume can't attach to two pods at once
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_NAME
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: DB_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: DB_PASSWORD
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-data        # real EBS-backed persistence
+---
+# Service: gives MySQL a stable in-cluster name "mysql".
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: demo
+spec:
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306

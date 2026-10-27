@@ -1,0 +1,18 @@
+# onprem: self-managed cluster (kind on the demo VM).
+# Images are built locally and loaded with `kind load docker-image`.
+
+frontend:
+  replicas: 2
+
+backend:
+  replicas: 2
+
+mysql:
+  persistence:
+    enabled: false
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+ingress:
+  host: three-tier.onprem.local

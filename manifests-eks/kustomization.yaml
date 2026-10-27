@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Deploy the whole EKS app with one tracked command:
+#   kubectl apply -k manifests-eks/
+#
+# Resources = the shared namespace + config/secret (reused from manifests/)
+# plus the three EKS-specific files in this folder.
+resources:
+  - ../manifests          # shared base: namespace + config/secret (kustomize base)
+  - 02-mysql.yaml
+  - 03-backend.yaml
+  - 04-frontend.yaml
+
+# Image transformer: rewrites the plain base names in the deployments to the
+# real Amazon ECR registry. Change newName here to deploy to a different
+# account/region — no edits to the deployment YAML needed.
+images:
+  - name: three-tier/backend
+    newName: 105673693246.dkr.ecr.us-east-1.amazonaws.com/three-tier/backend
+    newTag: latest
+  - name: three-tier/frontend
+    newName: 105673693246.dkr.ecr.us-east-1.amazonaws.com/three-tier/frontend
+    newTag: latest
