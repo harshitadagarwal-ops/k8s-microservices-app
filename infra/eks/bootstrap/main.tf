@@ -1,5 +1,5 @@
 # Bootstrap root: creates the S3 bucket + DynamoDB table that hold the
-# Terraform state for the main EKS root.
+# Terraform state for the kube-pilot EKS root.
 #
 # This root uses LOCAL state on purpose: it is the "chicken and egg" layer
 # that must exist before an S3 backend can be used anywhere else.
@@ -31,7 +31,7 @@ resource "aws_s3_bucket" "tfstate" {
 
   tags = {
     purpose = "terraform-state"
-    project = "kube-pilots"
+    project = "kube-pilot"
   }
 }
 
@@ -75,6 +75,6 @@ resource "aws_dynamodb_table" "tflock" {
 
   tags = {
     purpose = "terraform-state-lock"
-    project = "kube-pilots"
+    project = "kube-pilot"
   }
 }

@@ -1,11 +1,7 @@
-# EKS 1.32 cluster — a deployable, reachable version of the repo's infra/eks.
-#
-# Differences from infra/eks (the Preflight fixture) are intentional:
+# kube-pilot EKS 1.32 cluster — deployable and reachable.
 #   - public API endpoint        -> so kubectl / Argo CD work from your laptop
 #   - AL2023 node AMI            -> current default, valid on 1.32..1.36
-#                                   (the fixture uses AL2, planted finding F10)
 #   - EBS CSI driver add-on + IRSA -> so the app's MySQL gp3 PVC can bind
-#   - smaller/cheaper nodes      -> 2x t3.medium for a practical
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
@@ -23,8 +19,16 @@ module "eks" {
 
   enable_irsa = true
 
-  # Let the creating IAM principal administer the cluster (so your `harshita`
-  # user can run kubectl immediately after apply).
+  # This account's role lacks kms:TagResource and logs:CreateLogGroup, so the
+  # module's optional KMS secret-encryption key and CloudWatch control-plane
+  # logging are disabled. Secrets still work (stored unencrypted-at-rest by the
+  # default AWS-managed mechanism); control-plane logs just aren't shipped.
+  create_kms_key                         = false
+  cluster_encryption_config              = {}
+  create_cloudwatch_log_group            = false
+  cluster_enabled_log_types              = []
+
+  # Let the creating IAM principal administer the cluster.
   enable_cluster_creator_admin_permissions = true
 
   cluster_addons = {

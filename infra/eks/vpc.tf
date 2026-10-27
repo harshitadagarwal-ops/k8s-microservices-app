@@ -1,6 +1,4 @@
-# VPC for the EKS cluster.
-# The repo's original infra/eks assumes a pre-existing VPC; this practical
-# root creates its own so it is fully self-contained and deployable.
+# VPC for the kube-pilot EKS cluster.
 
 data "aws_availability_zones" "available" {
   state = "available"
@@ -29,12 +27,12 @@ module "vpc" {
 
   # Subnet tags required by EKS so it can discover subnets for load balancers.
   public_subnet_tags = {
-    "kubernetes.io/role/elb"                        = "1"
-    "kubernetes.io/cluster/${var.cluster_name}"     = "shared"
+    "kubernetes.io/role/elb"                    = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
   private_subnet_tags = {
-    "kubernetes.io/role/internal-elb"               = "1"
-    "kubernetes.io/cluster/${var.cluster_name}"     = "shared"
+    "kubernetes.io/role/internal-elb"           = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
 
   tags = var.tags

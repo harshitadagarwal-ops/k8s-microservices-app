@@ -1,0 +1,36 @@
+# Harness delegate Helm values — tracked in Git.
+#
+# Installs the Harness Kubernetes delegate onto the kube-pilot EKS cluster so the
+# Preflight K8s upgrade agent can drive the cluster through Harness.
+#
+# IMPORTANT: the delegate token is a SECRET and is NOT stored here. It is passed
+# at install time from the HARNESS_DELEGATE_TOKEN environment variable
+# (see install.sh / README.md). Never commit the token to Git.
+
+# Harness account / connection.
+accountId: gLXLxjTmQhGmdJXhAORKag
+managerEndpoint: https://app.harness.io
+delegateDockerImage: us-docker.pkg.dev/gar-prod-setup/harness-public/harness/delegate:26.10.90208
+
+# Project-scoped delegate: org Worker_Agents_Hackathon / project Team_KubePilots.
+# (Confirm these match the org/project identifiers shown in the Harness URL.)
+orgIdentifier: Worker_Agents_Hackathon
+projectIdentifier: Team_KubePilots
+
+# Delegate identity.
+delegateName: helm-delegate
+
+# Single replica is enough for a demo / upgrade driver.
+replicas: 1
+
+# Keep the delegate auto-updated by the upgrader CronJob.
+upgrader:
+  enabled: true
+
+# Resources (matches the sizing in the original repo manifest).
+resources:
+  limits:
+    memory: "2048Mi"
+  requests:
+    cpu: "0.5"
+    memory: "2048Mi"
