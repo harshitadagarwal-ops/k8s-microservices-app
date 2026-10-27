@@ -1,7 +1,7 @@
 # Frontend tier: Flask web UI — EKS version.
 #
 # Differences from manifests/04-frontend.yaml (Minikube):
-#   - image pulled from Amazon ECR (replace <ECR_REGISTRY> as in the backend)
+#   - image pulled from Amazon ECR (registry set by kustomization.yaml images:)
 #   - exposed through an ALB Ingress instead of NodePort + `minikube service`.
 #     The Service is ClusterIP (internal); the Ingress below tells the AWS Load
 #     Balancer Controller to create one internet-facing Application Load Balancer
@@ -23,7 +23,8 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: <ECR_REGISTRY>/three-tier/frontend:latest
+          # Base name; the real ECR registry is set by kustomization.yaml (images:).
+          image: three-tier/frontend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8080

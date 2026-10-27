@@ -4,9 +4,8 @@
 #   The image is pulled from Amazon ECR instead of Minikube's local Docker,
 #   and imagePullPolicy is Always so new pushes are picked up.
 #
-# Replace <ECR_REGISTRY> with your account's ECR registry, e.g.
-#   105673693246.dkr.ecr.us-east-1.amazonaws.com
-# (See README-EKS.md step "Build and push images".)
+# The ECR registry prefix is applied by kustomization.yaml (images:), so this
+# file keeps a plain base name. Deploy with: kubectl apply -k manifests-eks/
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,7 +23,8 @@ spec:
     spec:
       containers:
         - name: backend
-          image: <ECR_REGISTRY>/three-tier/backend:latest
+          # Base name; the real ECR registry is set by kustomization.yaml (images:).
+          image: three-tier/backend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5000

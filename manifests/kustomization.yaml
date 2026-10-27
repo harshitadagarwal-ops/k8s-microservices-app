@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Shared base used by the EKS overlay (manifests-eks/) via `resources: - ../manifests`.
+# Only the environment-agnostic pieces live here: namespace + config/secret.
+# The Minikube runbook still uses `kubectl apply -f manifests/` (which ignores
+# this file and applies the numbered YAMLs directly), so both flows coexist.
+resources:
+  - 00-namespace.yaml
+  - 01-config-and-secret.yaml

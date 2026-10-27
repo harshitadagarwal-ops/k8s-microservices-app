@@ -101,35 +101,25 @@ docker push 105673693246.dkr.ecr.us-east-1.amazonaws.com/three-tier/backend:late
 docker push 105673693246.dkr.ecr.us-east-1.amazonaws.com/three-tier/frontend:latest
 ```
 
-### 3. Set the registry in the manifests
+### 3. Deploy everything with Kustomize
 
-The EKS manifests use a `<ECR_REGISTRY>` placeholder. Replace it with your
-registry host (`105673693246.dkr.ecr.us-east-1.amazonaws.com`) in
-`manifests-eks/03-backend.yaml` and `manifests-eks/04-frontend.yaml` — or do it
-inline at apply time:
-
-```powershell
-$REGISTRY = "105673693246.dkr.ecr.us-east-1.amazonaws.com"
-(Get-Content manifests-eks/03-backend.yaml)  -replace '<ECR_REGISTRY>', $REGISTRY | kubectl apply -f -
-(Get-Content manifests-eks/04-frontend.yaml) -replace '<ECR_REGISTRY>', $REGISTRY | kubectl apply -f -
-```
-
-### 4. Deploy everything
-
-The namespace and config/secret are shared with the Minikube setup, so they come
-from `manifests/`. Only the three EKS-specific files come from `manifests-eks/`.
+Deployment is a single command. `manifests-eks/kustomization.yaml` pulls in the
+shared base (`manifests/` namespace + config/secret) and sets the ECR registry on
+the images via an `images:` transformer — so there's no placeholder to edit and
+no manual substitution.
 
 ```powershell
-# shared
-kubectl apply -f manifests/00-namespace.yaml
-kubectl apply -f manifests/01-config-and-secret.yaml
-
-# EKS-specific (mysql PVC, backend ECR, frontend ALB)
-kubectl apply -f manifests-eks/02-mysql.yaml
-# backend + frontend applied with the registry substitution from step 3
+kubectl apply -k manifests-eks/
 ```
 
-### 5. Watch it come up
+To deploy to a **different** account/region, edit the `images:` `newName` values
+in `manifests-eks/kustomization.yaml` (one place) — the deployment YAMLs keep
+plain base image names and don't change.
+
+> The Minikube runbook still uses `kubectl apply -f manifests/` for its flow;
+> that ignores the kustomization files, so both workflows coexist.
+
+### 4. Watch it come up
 ```powershell
 kubectl get pods -n demo -w
 # Wait until all pods are Running / READY  (MySQL takes ~30-60s the first time)
@@ -140,7 +130,7 @@ kubectl get pvc -n demo          # mysql-data should be Bound (EBS volume)
 kubectl get ingress -n demo      # ADDRESS fills in with the ALB DNS name (~2-3 min)
 ```
 
-### 6. Open the app
+### 5. Open the app
 ```powershell
 kubectl get ingress frontend -n demo -o jsonpath="{.status.loadBalancer.ingress[0].hostname}"
 ```
@@ -183,7 +173,7 @@ kubectl get all -n demo
 
 Remove the app (keeps the cluster):
 ```powershell
-kubectl delete -f manifests-eks/ ; kubectl delete -f manifests/01-config-and-secret.yaml ; kubectl delete -f manifests/00-namespace.yaml
+kubectl delete -k manifests-eks/
 ```
 Deleting the frontend Ingress removes the ALB. Deleting the mysql PVC releases
 the EBS volume.
@@ -202,7 +192,7 @@ terraform destroy
 
 | Symptom | Cause / fix |
 |---------|-------------|
-| Pods stuck `ImagePullBackOff` | Registry host wrong, or image not pushed. Recheck step 2/3. |
+| Pods stuck `ImagePullBackOff` | Registry wrong in `manifests-eks/kustomization.yaml` `images:`, or image not pushed. Recheck step 2 and the kustomization. |
 | `AccessDenied` on ECR push | Missing `ecr:*` push permissions on your user (see Prerequisites / `infra/eks/admin-permissions-request.json`). |
 | Ingress `ADDRESS` stays empty | AWS Load Balancer Controller issue: `kubectl logs -n kube-system deploy/aws-load-balancer-controller`. |
 | PVC stuck `Pending` | EBS CSI driver / gp3 StorageClass missing: `kubectl get storageclass`. |
