@@ -1,62 +1,75 @@
 # Harness — Preflight Upgrade Planner
 
-Pipeline-as-code skeleton for the Kubernetes Preflight worker agent, matching the
-architecture diagram (`diagrams/`).
+Pipeline-as-code for the Kubernetes Preflight worker agent.
 
 - Org: `Worker_Agents_Hackathon`
 - Project: `Team_KubePilots`
-- Pipeline: `k8s-upgrade-planner`
-- File: `k8s-upgrade-planner.yaml`
+- Pipeline: `K8sPreflightAgentPipelineKubePilot` (`k8s-upgrade-planner.yaml`)
+- Input set: `kube-pilot-eks` (`input-set-kube-pilot.yaml`)
 
-## What it is
+This is modeled on the team's `K8sPreflightAgentPipeline`, which uses the real
+Harness **`type: Agent`** step (referencing a named custom agent) — not the
+`harnessAI@1.0.0` plugin form.
 
-A read-only, PR-based upgrade-readiness agent. It scans a cluster + repo, scores
-readiness, plans the hops, opens a **fix PR**, waits for **human approval**, then
-notifies. It never applies changes to the live cluster.
+## Pipeline shape
 
-### The 7 steps (sequential)
+```
+Stage: Build (CI)
+  - parallel security scans: Gitleaks, Semgrep, OsvScanner
+  - Agent step: ca_preflight_k8s_upgrade_readiness_agent   (DISABLED: condition "false")
+Stage: Approval
+  - HarnessApproval -> KubePilotsUserGroup
+```
 
-1. Connect & Scan — read cluster (K8s connector) + repo (Git connector)
-2. Interpret Findings — LLM analysis vs official K8s/cloud docs
-3. Plan Upgrade Hops — one minor per hop, separate control-plane / node-pool tracks
-4. Score & Raise Fix PR — readiness score + a Git branch/PR with fixes
-5. Review Gate — Harness Approval (human; reject = re-fix)
-6. Document & Link — final report + official release links, stored as artifact
-7. Notify User Group — verdict + report link + PR link
+The agent step is intentionally **disabled** (`when.condition: "false"`). Flip it
+to `"true"` to actually run the agent.
 
-## Connectors used
+## Runtime inputs
+
+| Variable | Default | Notes |
+|---|---|---|
+| `current_version` | `1.34` | real cluster version, no `v` prefix |
+| `target_version` | `1.35` | next minor to plan to |
+| `target_env` | `<+input>` | allowedValues: prod-eks, staging-gke, dev-aks, onprem |
+| codebase `build` | `<+input>` | branch/tag of the repo to scan |
+
+## Passing inputs to the custom agent
+
+Pipeline variables are mapped to the agent via `agentSettings` on the Agent step:
+
+```yaml
+agentSettings:
+  current_version: <+pipeline.variables.current_version>
+  target_version: <+pipeline.variables.target_version>
+  target_env: <+pipeline.variables.target_env>
+```
+
+The keys under `agentSettings` **must match the Input names defined on the agent**
+(agent builder -> Inputs -> Add). If the agent defines different identifiers,
+rename the keys here to match.
+
+## Testing
+
+1. **Agent alone (fastest):** in the agent builder, open the Run/Test panel, set
+   the Inputs (current_version=1.34, target_version=1.35, target_env=prod-eks),
+   and run interactively. Confirms model + MCP connectors work.
+2. **Via pipeline:** set the agent step `condition: "true"`, Run, pick the
+   `kube-pilot-eks` input set, approve at the Approval stage.
+
+## Connectors used (project-level)
 
 | Purpose | Connector | Status |
 |---|---|---|
-| LLM (reasoning) | `connector_Anthropic_1033` | fix if Test fails |
-| Kubernetes (read cluster) | `kube-pilot-avyka-eks` | created |
-| Git (read repo / open PR) | `k8s-microservice-app` | created |
-| AWS (EKS platform checks: add-on versions, IRSA) | not yet created | needs delegate IRSA (read-only) |
+| Model (reasoning) | OpenAI (`avyka_openai_token`) | connected |
+| Kubernetes (read cluster) | `kube-pilot-avyka-eks` | connected |
+| Git (read repo / open PR) | `k8s-microservice-app` | connected |
+| AWS (EKS platform checks) | not yet created | needs delegate IRSA (read-only) |
 
-## Runtime inputs (Input Set)
-
-- `current_version` (e.g. 1.32)
-- `target_version` (e.g. 1.33)
-- `notify_usergroup` (Harness user group)
-- `target_environment` (prod-eks | staging-gke | dev-aks | onprem)
-
-## How to use
-
-This YAML is a **starting skeleton**, not a guaranteed byte-perfect import.
-Harness step/connector schemas vary by version. Recommended path:
-
-1. In Harness, build the pipeline with the UI ("Create with AI" / YAML builder)
-   and use this file as the reference for structure, prompts, and wiring.
-2. Verify the fields marked `# verify` against your project's step schema:
-   - the `harnessAI@1.0.0` step type and how tool connectors are attached
-   - the Notify step vs a pipeline Notification rule
-   - the delegate selector tag
-3. Fix the Anthropic connector (Test must pass) before running.
-4. Add the AWS read-only connector (via delegate IRSA) for full EKS platform
-   findings.
+Cluster/Git access is attached to the agent as **MCP connectors** in the agent
+builder (not a YAML field on the step).
 
 ## Least-privilege notes (from the agent instructions)
 
-- Kubernetes access should be **read-only** and must **exclude Secrets**.
-- Git starts read-only; branch/PR permission only for step 4.
-- No `eks:Update*` / no live changes — the agent only plans and opens PRs.
+- Kubernetes access read-only, excluding Secrets.
+- Git starts read-only; branch/PR only for the fix-PR task.
+- No live upgrades / no `eks:Update*` — the agent only plans and opens PRs.

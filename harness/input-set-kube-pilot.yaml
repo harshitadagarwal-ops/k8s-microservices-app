@@ -1,0 +1,31 @@
+# Input Set for K8sPreflightAgentPipelineKubePilot.
+# Supplies the runtime inputs (codebase build + target_env) and overrides the
+# version variables for a specific run.
+#
+# In Harness: Pipeline -> Input Sets -> New Input Set, or import this YAML.
+
+inputSet:
+  name: kube-pilot-eks
+  identifier: kube_pilot_eks
+  orgIdentifier: Worker_Agents_Hackathon
+  projectIdentifier: Team_KubePilots
+  pipeline:
+    identifier: K8sPreflightAgentPipelineKubePilot
+    properties:
+      ci:
+        codebase:
+          build:
+            type: branch
+            spec:
+              # Branch that exists in the Harness Code repo CI-Security-Test-Repo.
+              branch: main
+    variables:
+      - name: current_version
+        type: String
+        value: "1.34"
+      - name: target_version
+        type: String
+        value: "1.35"
+      - name: target_env
+        type: String
+        value: prod-eks

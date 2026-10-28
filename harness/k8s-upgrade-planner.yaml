@@ -1,163 +1,147 @@
-# Harness pipeline: k8s-upgrade-planner
-# Preflight Kubernetes upgrade-readiness worker agent.
+# New Preflight pipeline, based on the team's K8sPreflightAgentPipeline.
 #
-# Mirrors the architecture diagram: 7 sequential agent steps plus a human
-# Review Gate and a Notify step. The agent is READ-ONLY + fix-PR; it never
-# applies changes to the live cluster.
+# Differences from the original:
+#   - distinct name/identifier (safe to create alongside the existing one)
+#   - agent step wired with agentSettings (current_version/target_version/target_env)
+#     mapped from pipeline variables -- ready for when it's enabled
+#   - agent step kept DISABLED (condition: "false") as requested
+#   - version defaults reflect the real cluster (1.34), no 'v' prefix
+#   - target_env constrained with allowedValues
 #
-# SCHEMA NOTE: the harnessAI step and connector/tool field names vary by
-# Harness version. Fields marked "# verify" should be checked against your
-# project's step schema in the UI (Create with AI / YAML builder). Adjust
-# identifiers to match your org/project.
-#
-# Org:     Worker_Agents_Hackathon
-# Project: Team_KubePilots
-# Delegate: helm-delegate
+# NOTE: agentSettings keys must match the Input names defined on the agent
+# (agentName below). Adjust keys if the agent uses different input identifiers.
 
 pipeline:
-  name: k8s-upgrade-planner
-  identifier: k8s_upgrade_planner
-  orgIdentifier: Worker_Agents_Hackathon
+  name: K8s-Preflight-Agent-Pipeline-KubePilot
+  identifier: K8sPreflightAgentPipelineKubePilot
   projectIdentifier: Team_KubePilots
-
-  # ---- Runtime inputs (the "Pipeline Input Set" box in the diagram) ----
-  variables:
-    - name: current_version
-      type: String
-      description: Current Kubernetes minor version of the target cluster.
-      value: <+input>
-    - name: target_version
-      type: String
-      description: Desired Kubernetes minor version to plan up to.
-      value: <+input>
-    - name: notify_usergroup
-      type: String
-      description: Harness user group to notify with the verdict / report / PR.
-      value: <+input>
-    - name: target_environment
-      type: String
-      description: Which environment bundle to assess.
-      value: <+input>.default(prod-eks).allowedValues(prod-eks,staging-gke,dev-aks,onprem)
-
+  orgIdentifier: Worker_Agents_Hackathon
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        # Clone the real GitHub repo via the Git connector (NOT Harness-hosted
+        # Code). connectorRef must be the connector's identifier; repoName must
+        # match the GitHub repo exactly (note the plural: k8s-microservices-app).
+        # If the connector is Repo-level (points directly at one repo), repoName
+        # may be omitted.
+        connectorRef: k8smicroserviceapp
+        repoName: k8s-microservices-app
+        build: <+input>
   stages:
-    # CI stage: the harnessAI steps use the `uses:`/`with:` (plugin) form, which
-    # is only valid inside a CI stage's execution.steps -- that is why they must
-    # NOT be wrapped as `type:` Custom steps (the cause of the earlier errors).
     - stage:
-        name: Preflight Assessment
-        identifier: preflight_assessment
+        name: Build
+        identifier: Build
+        description: ""
         type: CI
         spec:
-          cloneCodebase: false
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: false
+          execution:
+            steps:
+              - parallel:
+                  - step:
+                      type: Gitleaks
+                      name: Gitleaks
+                      identifier: Gitleaks
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: repository
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+                  - step:
+                      type: Semgrep
+                      name: Semgrep_1
+                      identifier: Semgrep_1
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: repository
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+                  - step:
+                      type: OsvScanner
+                      name: OsvScanner_1
+                      identifier: OsvScanner_1
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: repository
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+              - step:
+                  type: Agent
+                  name: Worker Agent
+                  identifier: Worker_Agent
+                  spec:
+                    agentName: ca_preflight_k8s_upgrade_readiness_agent
+                    # Pass runtime inputs to the agent. These keys must match the
+                    # Input names defined on the agent in the agent builder.
+                    agentSettings:
+                      current_version: <+pipeline.variables.current_version>
+                      target_version: <+pipeline.variables.target_version>
+                      target_env: <+pipeline.variables.target_env>
+                  when:
+                    stageStatus: Success
+                    # DISABLED on purpose. Set to "true" to actually run the agent.
+                    condition: "false"
           platform:
             os: Linux
             arch: Amd64
           runtime:
             type: Cloud
             spec: {}
+    - stage:
+        name: Approval
+        identifier: Approval
+        description: ""
+        type: Approval
+        spec:
           execution:
             steps:
-
-              # 1. Connect & Scan
-              - uses: harnessAI@1.0.0
-                name: Connect and Scan
-                with:
-                  connector: connector_Anthropic_1033
-                  prompt: |-
-                    You are the Connect & Scan stage of the Kubernetes Preflight
-                    Worker Agent. Using the configured read-only Kubernetes and Git
-                    connectors, scan: nodes, workloads, CRDs, add-ons, in-use API
-                    versions, and the repo's Kubernetes manifests, Helm charts,
-                    Kustomize overlays, and Terraform. Treat scan results as the
-                    source of truth. Target cluster version:
-                    <+pipeline.variables.current_version>. Do NOT modify any live
-                    resource or access Secrets.
-
-              # 2. Interpret Findings (LLM)
-              - uses: harnessAI@1.0.0
-                name: Interpret Findings
-                with:
-                  connector: connector_Anthropic_1033
-                  prompt: |-
-                    Interpret the scan output against official Kubernetes and
-                    cloud-provider (EKS/GKE/AKS/self-managed) release docs. Detect
-                    deprecated or removed APIs, version incompatibilities,
-                    configuration issues, and platform-specific upgrade risks.
-                    Never override a scan finding. Separate verified findings from
-                    assumptions and recommendations.
-
-              # 3. Plan Upgrade Hops
-              - uses: harnessAI@1.0.0
-                name: Plan Upgrade Hops
-                with:
-                  connector: connector_Anthropic_1033
-                  prompt: |-
-                    Produce a step-by-step upgrade plan from
-                    <+pipeline.variables.current_version> to
-                    <+pipeline.variables.target_version>, one minor version per
-                    hop, with SEPARATE control-plane and node-pool tracks (node
-                    pools may lag within the platform's skew limit). Include
-                    platform checks for <+pipeline.variables.target_environment>:
-                    e.g. EKS IRSA -> Pod Identity and add-on versions.
-
-              # 4. Score & Raise Fix PR
-              - uses: harnessAI@1.0.0
-                name: Score and Raise Fix PR
-                with:
-                  connector: connector_Anthropic_1033
-                  prompt: |-
-                    Calculate the initial readiness score and the projected score
-                    after the recommended fixes, and explain the scoring rules and
-                    which findings affect the score. Then, when authorized, create
-                    a SEPARATE Git branch and pull request with the configuration
-                    fixes (API bumps, Helm values, Kustomize/Terraform refs).
-                    Include evidence and verification steps per fix. Do NOT merge.
-
-              # 5. Review Gate (human approval)
               - step:
-                  name: Review Gate
-                  identifier: review_gate
+                  name: Harness Approval
+                  identifier: Harness_Approval
                   type: HarnessApproval
                   timeout: 1d
                   spec:
                     approvalMessage: |-
-                      Review the Preflight findings, readiness score, upgrade plan,
-                      and the fix PR. Approve to confirm; reject to re-fix. No
-                      changes are merged or applied without approval.
+                      Please review the Preflight findings, readiness score,
+                      upgrade plan, and fix PR, then approve or reject.
                     includePipelineExecutionHistory: true
-                    isAutoRejectEnabled: false
                     approvers:
-                      userGroups:
-                        - <+pipeline.variables.notify_usergroup>
                       minimumCount: 1
                       disallowPipelineExecutor: false
+                      userGroups:
+                        - KubePilotsUserGroup
+                    isAutoRejectEnabled: false
                     approverInputs: []
-
-              # 6. Document & Link
-              - uses: harnessAI@1.0.0
-                name: Document and Link
-                with:
-                  connector: connector_Anthropic_1033
-                  prompt: |-
-                    Produce the final report: readiness score (initial ->
-                    projected), risk findings, affected resources, the upgrade plan
-                    (both tracks), platform-specific notes, recommended fixes, and
-                    official release links (one per hop, from the version docs, not
-                    invented). Store it as a pipeline artifact. Never print secrets.
-
-              # 7. Notify User Group
-              - step:
-                  name: Notify User Group
-                  identifier: notify_user_group
-                  type: Email
-                  timeout: 10m
-                  spec:
-                    to: ""
-                    subject: "Preflight K8s upgrade assessment"
-                    body: |-
-                      The Preflight assessment completed. Verdict + readiness
-                      score, report link, and PR link are in the pipeline output.
-
-        # Run on the environment's delegate.
-        delegateSelectors:
-          - helm-delegate
+        tags: {}
+  variables:
+    - name: current_version
+      type: String
+      description: Current Kubernetes minor version of the target cluster.
+      required: true
+      value: <+input>
+    - name: target_version
+      type: String
+      description: Desired Kubernetes minor version to plan up to.
+      required: true
+      value: <+input>
+    - name: target_env
+      type: String
+      description: Which environment bundle to assess.
+      required: true
+      value: <+input>.allowedValues(prod-eks,staging-gke,dev-aks,onprem)
