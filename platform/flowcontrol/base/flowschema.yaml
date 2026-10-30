@@ -1,5 +1,5 @@
 # Routes read traffic from reporting service accounts to the batch-reporting level.
-apiVersion: flowcontrol.apiserver.k8s.io/v1beta3
+apiVersion: flowcontrol.apiserver.k8s.io/v1
 kind: FlowSchema
 metadata:
   name: batch-reporting

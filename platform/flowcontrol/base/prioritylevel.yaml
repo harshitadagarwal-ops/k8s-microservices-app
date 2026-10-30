@@ -1,5 +1,5 @@
 # Keeps batch reporting traffic from starving interactive API requests.
-apiVersion: flowcontrol.apiserver.k8s.io/v1beta3
+apiVersion: flowcontrol.apiserver.k8s.io/v1
 kind: PriorityLevelConfiguration
 metadata:
   name: batch-reporting
