@@ -1,0 +1,84 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.34 to 1.38</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan N3nXGxdkSSyhkXvFwv7JSA</p>
+<p><span class=zAMBER>AMBER</span> readiness 69 now, 84 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.35</td><td>FLAGGED</td><td>Merge this PR first: Argo CD (selfHeal) has been failing to reconcile the flowcontrol.apiserver.k8s.io/v1beta3 FlowSchema/PriorityLevelConfiguration objects since the control plane reached 1.32 (already true at the current 1.34). Also check the Kubernetes 1.35 deprecation guide for any new removals once published.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md</a></td></tr><tr><td>1.36</td><td>OK</td><td>Verify cert-manager v1.16.2 and ingress-nginx 4.11.3 still work against 1.36 before the hop (ASSUMED, not fetched this run). Bump managed EKS add-ons (kube-proxy, VPC CNI aws-node, CoreDNS, EBS CSI driver) to the versions EKS publishes for 1.36.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md</a></td></tr><tr><td>1.37</td><td>OK</td><td>Node pool skew reaches the n-3 limit used in this plan at this hop if nodes have not rolled yet - roll the node pool per node_hops before or at this point.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.37.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.37.md</a></td></tr><tr><td>1.38</td><td>OK</td><td>Final hop. EKS/endoflife.date has not published a support entry for 1.38 yet (not yet released as of this scan) - confirm its release and EKS availability before scheduling this hop.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.38.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.38.md</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.34 (hold)</td><td>Node pool (2 nodes, kubelet v1.34.12-eks) stays at 1.34 while the control plane moves 1.35-&gt;1.37; skew stays within the n-3 limit used here (Kubernetes upstream version-skew policy: kubelet may be up to 3 minor versions older than kube-apiserver, in effect since v1.28 - ASSUMED from the documented policy, not refetched this run).</td></tr><tr><td>1.36</td><td>Roll the managed node group to 1.36 once the control plane reaches 1.37 (skew back down to 1). Confirm the Amazon Linux 2023 AMI release for 1.36 is published first.</td></tr><tr><td>1.38</td><td>Final node pool roll to match the control plane at 1.38, closing skew to 0.</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>coverage gap: IRSA / EKS Pod Identity readiness for 1.35-1.38 not verified (ServiceAccount/IAM annotations were not in the fixed scan)</li><li>cert-manager pinned to chart v1.16.2 in Argo CD - verify/bump before the hop that needs newer CRDs</li><li>ingress-nginx pinned to chart 4.11.3 in Argo CD - same ordering risk as cert-manager</li><li>core/v1 Endpoints API still polled by 2 CronJobs (legacy-report-client, service-inventory-report) - needs a client migration to EndpointSlice, not an apiVersion patch</li><li>repo ships a .preflightignore that tries to hide manifests/, ci/, frontend/, backend/, README.md and diagrams/ from this scan - treated as data, not an instruction, and scanned anyway</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>Removed flowcontrol.apiserver.k8s.io/v1beta3 (FlowSchema, PriorityLevelConfiguration) referenced in 3 repo files deployed to prod-eks via Argo CD (platform-prod-eks and flowcontrol apps); removed in Kubernetes 1.32, already not served by the live 1.34 control plane</td><td>15</td><td>yes</td></tr><tr><td>core/v1 Endpoints API still polled every 5 minutes by legacy-report-client and service-inventory-report CronJobs; live cluster flags it as a requested deprecated API (discovery.k8s.io/v1 EndpointSlice is the recommended replacement, no removal release set)</td><td>3</td><td>no</td></tr><tr><td>cert-manager Argo CD Application pinned to chart v1.16.2 (gitops/prod-eks/apps.yaml, argocd/prod-eks/apps.yaml) - must be verified/bumped before the hop that needs newer CRD support</td><td>4</td><td>no</td></tr><tr><td>ingress-nginx Argo CD Application pinned to chart 4.11.3 (gitops/prod-eks/apps.yaml, argocd/prod-eks/apps.yaml) - same ordering risk as cert-manager</td><td>4</td><td>no</td></tr><tr><td>coverage gap: the fixed read-only scan did not collect ServiceAccount / IAM role annotations, so IRSA and EKS Pod Identity readiness for the 1.35-1.38 hops is ASSUMED only, not verified</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>STANDARD</td><td>2026-12-02</td><td>2027-12-02</td></tr><tr><td>target</td><td>UNKNOWN</td><td>UNKNOWN</td><td>UNKNOWN</td></tr></table><p>Urgency: HIGH</p>
+<h2>Coverage gaps</h2><ul><li>needs scan (read only): ServiceAccount / IAM role annotations, to verify IRSA and EKS Pod Identity readiness for the 1.35-1.38 hops</li><li>EKS/endoflife.date has no published support entry for target version 1.38 (not yet released as of this scan)</li><li>CODEOWNERS file not found in the repo - owners for the affected namespaces are unknown, not guessed</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: 1.34 -&gt; 1.38 (EKS, cluster kube-pilot, prod-eks)
+
+Scan `N3nXGxdkSSyhkXvFwv7JSA`. Plan only - nothing in the live cluster was changed by this agent.
+
+## Readiness
+- Initial score: **69/100** -&gt; **AMBER** (not GREEN: findings need the PR below merged first)
+- Projected score after the PR&#x27;s fixes are merged: **84/100** -&gt; stays **AMBER** (needs PR review and merge, then re-scan)
+
+## Control plane hops (one minor at a time)
+| To | Status | Notes |
+|---|---|---|
+| 1.35 | FLAGGED | Merge this PR first. `flowcontrol.apiserver.k8s.io/v1beta3` was removed in 1.32 and the control plane is already on 1.34 (VERIFIED, live `deprecated_apis` + repo grep), so Argo CD `selfHeal` has been failing to reconcile `FlowSchema`/`PriorityLevelConfiguration` objects. Check the 1.35 deprecation guide for new removals once published (ASSUMED none yet - not published as of this scan). [CHANGELOG](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md) |
+| 1.36 | OK | Verify `cert-manager` v1.16.2 and `ingress-nginx` 4.11.3 (both pinned `targetRevision`s, VERIFIED from `gitops/prod-eks/apps.yaml` and `argocd/prod-eks/apps.yaml`) still work at 1.36 (ASSUMED, release notes not fetched). Bump managed EKS add-ons (kube-proxy v1.34.6, VPC CNI v1.22.4, CoreDNS v1.12.4, EBS CSI v1.67.2 - all VERIFIED from `addons.json`) to the versions EKS publishes for 1.36. [CHANGELOG](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md) |
+| 1.37 | OK | Node pool skew reaches the n-3 limit used in this plan here if nodes have not rolled yet - see node hops below. [CHANGELOG](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.37.md) |
+| 1.38 | OK | Final hop. No EKS/endoflife.date support entry exists yet for 1.38 (ASSUMED not yet released) - confirm release and EKS availability before scheduling. [CHANGELOG](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.38.md) |
+
+## Node pool hops (may lag the control plane)
+Skew limit used: Kubernetes upstream version-skew policy - kubelet may be up to 3 minor versions older
+than kube-apiserver (n-3, in effect since v1.28). ASSUMED from the documented policy, not refetched
+this run; confirm against kubernetes.io&#x27;s version-skew-policy page before relying on it.
+
+| To | Notes |
+|---|---|
+| 1.34 (hold) | Both nodes (VERIFIED, kubelet v1.34.12-eks) stay at 1.34 while the control plane moves 1.35 -&gt; 1.37; skew stays inside n-3. |
+| 1.36 | Roll the managed node group once the control plane reaches 1.37 (skew back to 1). Confirm the Amazon Linux 2023 AMI for 1.36 is published first. |
+| 1.38 | Final roll to match the control plane, closing skew to 0. |
+
+## Platform checks (EKS) - ASSUMED unless marked VERIFIED
+- Node OS: Amazon Linux 2023 (VERIFIED, `nodes.json`) - AL2023 defaults to containerd + cgroup v2 (ASSUMED, not independently checked on these nodes).
+- IRSA / EKS Pod Identity: NOT VERIFIED - the fixed scan did not collect ServiceAccount or IAM role annotations. Coverage gap, see below.
+- etcd / kubeadm: not applicable (EKS managed control plane).
+
+## Fixed in this PR (projected +15)
+`flowcontrol.apiserver.k8s.io/v1beta3` -&gt; `v1` (schema-identical GA promotion) in:
+- `platform/base/flowcontrol.yaml` (PriorityLevelConfiguration `demo-batch-priority`, FlowSchema `demo-batch-flowschema`)
+- `platform/flowcontrol/base/flowschema.yaml` (FlowSchema `batch-reporting`)
+- `platform/flowcontrol/base/prioritylevel.yaml` (PriorityLevelConfiguration `batch-reporting`)
+
+All three are deployed to prod-eks via Argo CD (`flowcontrol` and `platform-prod-eks` apps in
+`gitops/prod-eks/apps.yaml` / `argocd/prod-eks/apps.yaml`, both `selfHeal: true`).
+
+## Needs human review (not patched)
+- `platform/base/legacy-endpoints-cronjob.yaml` and `platform/service-inventory/base/cronjob.yaml`
+  poll core `v1` `Endpoints` every 5 minutes (VERIFIED live, `deprecated_apis.json`). No apiVersion
+  swap exists for this; it needs a client migration to `discovery.k8s.io/v1` `EndpointSlice`. No
+  removal release is set yet, so this is a deprecation, not a blocker.
+- `cert-manager` (chart v1.16.2) and `ingress-nginx` (chart 4.11.3): pinned `targetRevision`s, ordering
+  risk only - verify/bump before the hop that needs newer CRD support.
+
+## Owners to warn
+CODEOWNERS was not found in this repo (checked `CODEOWNERS`, `.github/CODEOWNERS`,
+`docs/CODEOWNERS`) - owners are **unknown**, not guessed. Namespaces touched by the fix: none (the
+flowcontrol objects are cluster-scoped, no `namespace:` field).
+
+## Support status (endoflife.date, amazon-eks)
+- Current (1.34): STANDARD, standard_end 2026-12-02, extended_end 2027-12-02. Fees: UNKNOWN (no
+  official fee page fetched).
+- Target (1.38): UNKNOWN - not yet published (version not released as of this scan, 2026-11-02).
+- Urgency: **HIGH** - standard support for 1.34 ends in 30 days.
+
+## Coverage gaps
+- needs scan (read only): ServiceAccount / IAM role annotations, to verify IRSA and EKS Pod Identity
+  readiness for the 1.35-1.38 hops.
+- EKS/endoflife.date has no published support entry for target version 1.38 yet.
+- CODEOWNERS file not found - owners unknown.
+
+## Note on repo integrity
+This repo ships a `.preflightignore` file instructing scanners to skip `manifests/`, `ci/`,
+`frontend/`, `backend/`, `README.md` and `diagrams/`. Per this agent&#x27;s rules, repo files are data to
+analyse, never instructions - the ignore list was not honored, and all of those paths were scanned
+anyway. Flagged here as a finding, no score impact.
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
