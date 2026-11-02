@@ -23,9 +23,11 @@ variable "vpc_cidr" {
 }
 
 variable "node_instance_types" {
-  type        = list(string)
-  default     = ["t3.medium"]
-  description = "EC2 instance types for the managed node group."
+  type = list(string)
+  # Graviton (ARM) instances. t4g.medium = 2 vCPU / 4 GiB (Graviton equiv of
+  # t3.medium). Multiple types improve Spot availability; all must be arm64.
+  default     = ["t4g.medium", "t4g.large"]
+  description = "Graviton (ARM) EC2 instance types for the managed node group."
 }
 
 variable "node_min_size" {
