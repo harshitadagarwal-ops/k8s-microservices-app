@@ -201,6 +201,35 @@ terraform destroy
 
 ---
 
+## Preflight agent read-only RBAC
+
+The Harness Preflight pipeline runs its CI pod as the service account
+`preflight-readonly` in namespace `harness-preflight`. If that SA is missing,
+the pod fails to create with:
+
+```
+pods "harnessci-preflight-..." is forbidden: error looking up service account
+harness-preflight/preflight-readonly: serviceaccount "preflight-readonly" not found
+```
+
+Create it (least-privilege: read cluster state for scanning, NO secrets, no write):
+
+```powershell
+kubectl apply -f manifests-eks/preflight-readonly-rbac.yaml
+```
+
+Verify:
+```powershell
+kubectl -n harness-preflight get sa preflight-readonly
+kubectl auth can-i list nodes   --as=system:serviceaccount:harness-preflight:preflight-readonly   # yes
+kubectl auth can-i get secrets  --as=system:serviceaccount:harness-preflight:preflight-readonly   # no
+```
+
+The manifest (`manifests-eks/preflight-readonly-rbac.yaml`) grants `get/list/watch`
+on workloads, networking, CRDs/APIServices, RBAC objects, storage, flow-control,
+and admission webhooks — everything the agent needs to detect deprecated APIs and
+upgrade risks — while deliberately excluding Secrets and any write verbs.
+
 ## Cost saving: scale nodes to zero when idle
 
 The EKS control plane and NAT gateway bill ~$0.15/hr regardless, but you can stop

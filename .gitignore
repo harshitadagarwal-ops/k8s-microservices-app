@@ -2,7 +2,7 @@
 # Harness VS Code extension — MCP configs may contain API keys
 .mcp.json
 .vscode/mcp.json
-
+.vscode/
 # Harness delegate manifest — contains the delegate token
 harness-delegate.yaml
 

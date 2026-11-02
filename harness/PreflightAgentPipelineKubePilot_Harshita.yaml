@@ -1,0 +1,369 @@
+pipeline:
+  projectIdentifier: Team_KubePilots
+  orgIdentifier: Worker_Agents_Hackathon
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: k8smicroserviceapp
+        repoName: k8s-microservices-app
+        build: <+input>
+  stages:
+    - stage:
+        name: Preflight
+        identifier: Preflight
+        description: Scan cluster and repos, score readiness, plan hops, raise fix PRs.
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: false
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: <+input>
+              namespace: harness-preflight
+              serviceAccountName: preflight-readonly
+              automountServiceAccountToken: true
+              nodeSelector: {}
+              os: Linux
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Cluster Scan
+                  identifier: Cluster_Scan
+                  timeout: 5m
+                  spec:
+                    connectorRef: dockerhub
+                    image: alpine/k8s:1.34.12
+                    shell: Bash
+                    command: |
+                      set -uo pipefail
+                      D=/harness/preflight/facts
+                      mkdir -p "$D"
+                      rm -f "$D"/*.json "$D"/*.err "$D"/*.raw "$D"/*.tsv 2>/dev/null || true
+                      RETRIES="${MAX_RETRIES:-2}"
+                      ST="$D/_status.tsv"
+                      : > "$ST"
+
+                      # In-cluster access: report what the pod provides, and build a kubeconfig from the service account when kubectl has none
+                      SA=/var/run/secrets/kubernetes.io/serviceaccount
+                      echo "Service account token mounted: $([ -s "$SA/token" ] && echo yes || echo no)"
+                      echo "Service account CA mounted: $([ -s "$SA/ca.crt" ] && echo yes || echo no)"
+                      echo "KUBERNETES_SERVICE_HOST set: $([ -n "${KUBERNETES_SERVICE_HOST:-}" ] && echo yes || echo no)"
+                      echo "KUBECONFIG set: $([ -n "${KUBECONFIG:-}" ] && echo yes || echo no)"
+                      if [ -z "${KUBECONFIG:-}" ] && [ -s "$SA/token" ] && [ -s "$SA/ca.crt" ]; then
+                        KC=/tmp/preflight-kubeconfig
+                        kubectl config --kubeconfig="$KC" set-cluster preflight --server="https://${KUBERNETES_SERVICE_HOST:-kubernetes.default.svc}:${KUBERNETES_SERVICE_PORT:-443}" --certificate-authority="$SA/ca.crt" --embed-certs=true > /dev/null
+                        kubectl config --kubeconfig="$KC" set-credentials preflight --token="$(cat "$SA/token")" > /dev/null
+                        kubectl config --kubeconfig="$KC" set-context preflight --cluster=preflight --user=preflight > /dev/null
+                        kubectl config --kubeconfig="$KC" use-context preflight > /dev/null
+                        export KUBECONFIG="$KC"
+                        echo "Built an in-cluster kubeconfig from the service account"
+                      elif [ ! -s "$SA/token" ]; then
+                        echo "No service account token in this container: the pod is not mounting it, so kubectl cannot reach the cluster"
+                      fi
+
+                      # capture NAME JQ_FILTER COMMAND...
+                      # Runs a read-only command, optionally reduces its JSON with a jq filter, writes $D/NAME.json,
+                      # and records ok or error in the status file. Retries only transient errors.
+                      capture() {
+                        name="$1"; filter="$2"; shift 2
+                        n=0
+                        while :; do
+                          if "$@" > "$D/$name.raw" 2> "$D/$name.err"; then
+                            if [ -n "$filter" ]; then
+                              if jq -c "$filter" "$D/$name.raw" > "$D/$name.json" 2> "$D/$name.err"; then
+                                printf '%s\t%s\t%s\n' "$name" ok "" >> "$ST"
+                              else
+                                printf '%s\t%s\t%s\n' "$name" error "jq failed" >> "$ST"
+                              fi
+                            else
+                              mv "$D/$name.raw" "$D/$name.json"
+                              printf '%s\t%s\t%s\n' "$name" ok "" >> "$ST"
+                            fi
+                            break
+                          fi
+                          msg=$(head -c 200 "$D/$name.err" | tr '\n\t' '  ')
+                          case "$msg" in
+                            *orbidden*|*nauthorized*|*NotFound*|*"not found"*) printf '%s\t%s\t%s\n' "$name" error "$msg" >> "$ST"; break ;;
+                          esac
+                          n=$((n+1))
+                          if [ "$n" -gt "$RETRIES" ]; then printf '%s\t%s\t%s\n' "$name" error "$msg" >> "$ST"; break; fi
+                          sleep 2
+                        done
+                        rm -f "$D/$name.raw" "$D/$name.err"
+                      }
+
+                      # Deprecated or removed APIs that clients actually requested (needs get on /metrics)
+                      dep_apis() {
+                        kubectl get --raw /metrics --request-timeout=60s \
+                          | { grep '^apiserver_requested_deprecated_apis{' || true; } \
+                          | sed -E 's/.*[{,]group="([^"]*)".*,removed_release="([^"]*)".*,resource="([^"]*)".*,version="([^"]*)".*/\1\t\4\t\3\t\2/' \
+                          | jq -R -s -c 'split("\n") | map(select(length > 0) | split("\t") | {group: .[0], version: .[1], resource: .[2], removed_release: .[3]})'
+                      }
+
+                      capture cluster_version '{server: .serverVersion.gitVersion, platform: .serverVersion.platform}' kubectl version -o json --request-timeout=60s
+                      capture nodes '[.items[] | {name: .metadata.name, kubelet: .status.nodeInfo.kubeletVersion, runtime: .status.nodeInfo.containerRuntimeVersion, os: .status.nodeInfo.osImage, arch: .status.nodeInfo.architecture, pool: (.metadata.labels["eks.amazonaws.com/nodegroup"] // .metadata.labels["cloud.google.com/gke-nodepool"] // .metadata.labels["kubernetes.azure.com/agentpool"] // null), ready: ([.status.conditions[] | select(.type == "Ready") | .status] | first)}]' kubectl get nodes -o json --request-timeout=60s
+                      capture deprecated_apis "" dep_apis
+                      capture addons '[.items[] | select(.metadata.namespace | test("^(kube-system|kube-public|ingress.*|cert-manager|istio.*|argocd|argo.*|flux.*|calico.*|cilium|linkerd.*|monitoring|metallb.*|gatekeeper.*|kyverno)$")) | {kind: .kind, namespace: .metadata.namespace, name: .metadata.name, images: [.spec.template.spec.containers[].image]}]' kubectl get deploy,ds,sts -A -o json --request-timeout=60s
+                      capture crds '[.items[] | {name: .metadata.name, stored: .status.storedVersions, served: [.spec.versions[] | select(.served) | .name]}]' kubectl get crd -o json --request-timeout=60s
+                      capture namespaces '[.items[].metadata.name]' kubectl get ns -o json --request-timeout=60s
+
+                      jq -R -s -c 'split("\n") | map(select(length > 0) | split("\t") | {file: .[0], status: .[1], error: (.[2] // "")})' "$ST" > "$D/_status.json"
+                      rm -f "$ST"
+                      echo "Cluster facts written to $D:"
+                      jq -r '.[] | "  \(.file): \(.status) \(.error)"' "$D/_status.json"
+                      ls -l "$D" | head -n 20
+                    envVariables:
+                      MAX_RETRIES: <+pipeline.variables.max_retries>
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: Agent
+                  name: Worker Agent
+                  identifier: Worker_Agent
+                  spec:
+                    agentName: ca_preflight_k8s_upgrade_readiness
+                    agentSettings:
+                      llm_connector: kubepilots_avyka_anthropic_connector
+                      scan_id: <+pipeline.executionId>
+                      current_version: <+pipeline.variables.current_version>
+                      target_version: <+pipeline.variables.target_version>
+                      target_env: <+pipeline.variables.target_env>
+                      platform: <+pipeline.variables.platform>
+                      cluster_name: <+pipeline.variables.cluster_name>
+                      repos: <+pipeline.variables.repos>
+                      app_repo_map_path: <+pipeline.variables.app_repo_map_path>
+                      deprecation_map_path: <+pipeline.variables.deprecation_map_path>
+                      max_fix_attempts: <+pipeline.variables.max_fix_attempts>
+                      max_retries: <+pipeline.variables.max_retries>
+                      max_turns: <+pipeline.variables.max_turns>
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: Run
+                  name: Read Agent Output
+                  identifier: Read_Agent_Output
+                  timeout: 1m
+                  spec:
+                    connectorRef: dockerhub
+                    image: alpine/k8s:1.34.12
+                    shell: Bash
+                    command: |
+                      F=/harness/preflight/output.json
+                      if [ ! -s "$F" ] || ! jq -e . "$F" >/dev/null 2>&1; then
+                        echo "Agent output missing or invalid - treating as RED"
+                        ZONE=RED; SCORE_INITIAL=0; SCORE_PROJECTED=0
+                        TOP_BLOCKERS="Scan incomplete: no valid agent output"
+                        PR_LINKS="none"; HOPS="n/a"; SUPPORT="unknown"
+                      else
+                        ZONE=$(jq -r '.score.zone' "$F")
+                        SCORE_INITIAL=$(jq -r '.score.initial' "$F")
+                        SCORE_PROJECTED=$(jq -r '.score.projected' "$F")
+                        TOP_BLOCKERS=$(jq -r '(.top_blockers // []) | join("; ") | if .=="" then "none" else . end' "$F")
+                        PR_LINKS=$(jq -r '[(.prs // [])[].url] | join(" ") | if .=="" then "none" else . end' "$F")
+                        HOPS=$(jq -r '[.current_version] + [(.hops // [])[] | .to + (if .status=="FLAGGED" then "⚠" else "" end)] | join(" → ")' "$F")
+                        SUPPORT=$(jq -r '.support // {} | "\(.current.status // "UNKNOWN") until \(if .current.status=="STANDARD" then .current.standard_end else .current.extended_end end // "n/a") | Fee: \(.monthly_fee_current // "UNKNOWN") → \(.monthly_fee_target // "UNKNOWN")/month | Urgency: \(.urgency // "UNKNOWN")"' "$F")
+                      fi
+                      [ -f /harness/preflight/plan.md ] && cat /harness/preflight/plan.md
+                    outputVariables:
+                      - name: ZONE
+                      - name: SCORE_INITIAL
+                      - name: SCORE_PROJECTED
+                      - name: TOP_BLOCKERS
+                      - name: PR_LINKS
+                      - name: HOPS
+                      - name: SUPPORT
+                  when:
+                    stageStatus: All
+              - step:
+                  type: Run
+                  name: Agent Usage Report
+                  identifier: Agent_Usage_Report
+                  timeout: 5m
+                  spec:
+                    connectorRef: dockerhub
+                    image: alpine/k8s:1.34.12
+                    shell: Bash
+                    command: |
+                      set -uo pipefail
+                      num() { case "${1:-}" in ''|null|*[!0-9.]*) echo 0 ;; *) echo "$1" ;; esac; }
+                      # Agent outputs sit on the child step (A_*); the wrapper path (W_*) is the fallback
+                      pick() { a=$(num "${1:-}"); if [ "$a" != "0" ]; then echo "$a"; else num "${2:-}"; fi; }
+                      COST=$(pick "${A_COST_USD:-}" "${W_COST_USD:-}"); TURNS=$(pick "${A_TOTAL_TURNS:-}" "${W_TOTAL_TURNS:-}"); TOKENS=$(pick "${A_TOTAL_TOKENS:-}" "${W_TOTAL_TOKENS:-}")
+                      IN_T=$(pick "${A_INPUT_TOKENS:-}" "${W_INPUT_TOKENS:-}"); OUT_T=$(pick "${A_OUTPUT_TOKENS:-}" "${W_OUTPUT_TOKENS:-}")
+                      CR_T=$(pick "${A_CACHE_READ_TOKENS:-}" "${W_CACHE_READ_TOKENS:-}"); CW_T=$(pick "${A_CACHE_CREATION_TOKENS:-}" "${W_CACHE_CREATION_TOKENS:-}")
+
+                      # Outcome of this run. A successful outcome = the agent wrote a valid output.json with a zone and a
+                      # readiness score above 0 (score 0 means the cluster could not be scanned at all).
+                      F=/harness/preflight/output.json
+                      ZONE=NONE; INITIAL=0; SUCCESS=0
+                      if [ -s "$F" ] && jq -e . "$F" > /dev/null 2>&1; then
+                        ZONE=$(jq -r '.score.zone // "NONE"' "$F")
+                        INITIAL=$(jq -r '.score.initial // 0' "$F")
+                        case "$ZONE" in
+                          GREEN|AMBER|RED) if [ "$(awk -v i="$INITIAL" 'BEGIN { print (i + 0 > 0) ? 1 : 0 }')" = "1" ]; then SUCCESS=1; fi ;;
+                        esac
+                      fi
+
+                      # Running ledger for this pipeline in the project File Store (best effort)
+                      FID="agent_usage_$(printf '%s' "$PIPELINE_ID" | tr '[:upper:]' '[:lower:]')"
+                      Q="accountIdentifier=${HARNESS_ACCOUNT}&orgIdentifier=${HARNESS_ORG}&projectIdentifier=${HARNESS_PROJECT}"
+                      FS="https://app.harness.io/ng/api/file-store"
+                      LEDGER=/tmp/ledger.csv
+                      code=$(curl -sS -o "$LEDGER" -w '%{http_code}' --max-time 30 -H "x-api-key: ${HARNESS_API_KEY}" "$FS/files/$FID/download?$Q" 2>/dev/null || echo 000)
+                      EXISTS=0
+                      if [ "$code" = "200" ] && head -1 "$LEDGER" 2>/dev/null | grep -q '^timestamp,'; then
+                        EXISTS=1
+                      else
+                        echo "timestamp,execution_id,agent_status,zone,success,cost_usd,turns,total_tokens" > "$LEDGER"
+                      fi
+                      echo "$(date -u +%Y-%m-%dT%H:%M:%SZ),${EXECUTION_ID},${AGENT_STATUS:-unknown},${ZONE},${SUCCESS},${COST},${TURNS},${TOKENS}" >> "$LEDGER"
+
+                      if [ "$EXISTS" = "1" ]; then METHOD=PUT; URL="$FS/$FID?$Q"; else METHOD=POST; URL="$FS?$Q"; fi
+                      up=$(curl -sS -o /tmp/up.json -w '%{http_code}' --max-time 30 -X "$METHOD" -H "x-api-key: ${HARNESS_API_KEY}" \
+                        -F "identifier=$FID" -F "name=$FID.csv" -F "type=FILE" -F "parentIdentifier=Root" \
+                        -F "fileUsage=CONFIG" -F "mimeType=text/csv" -F "content=@$LEDGER" "$URL" 2>/dev/null || echo 000)
+                      if [ "${up:0:1}" = "2" ]; then SAVED="saved to File Store as $FID"; else SAVED="NOT saved (HTTP $up: $(head -c 200 /tmp/up.json 2>/dev/null)), totals below cover this run only"; fi
+
+                      set -- $(awk -F, 'NR>1 { r++; if ($6+0 > 0) a++; s += $5; c += $6 } END { printf "%d %d %d %.6f\n", r, a, s, c }' "$LEDGER")
+                      RUNS=$1; AGENT_RUNS=$2; SUCCESSES=$3; TOTAL_COST=$4
+                      if [ "$SUCCESSES" -gt 0 ]; then CPS=$(awk -v c="$TOTAL_COST" -v s="$SUCCESSES" 'BEGIN { printf "%.4f", c / s }'); else CPS="n/a (no successful outcome yet)"; fi
+                      AVG=$(awk -v c="$TOTAL_COST" -v a="$AGENT_RUNS" 'BEGIN { if (a > 0) printf "%.4f", c / a; else print "n/a" }')
+
+                      echo "================ Agent usage: $PIPELINE_ID ================"
+                      echo "This run    : agent step=${AGENT_STATUS:-unknown}  zone=$ZONE  score=$INITIAL  success=$SUCCESS"
+                      echo "              cost_usd=${COST}  turns=$TURNS  tokens=$TOKENS"
+                      echo "              input=$IN_T output=$OUT_T cache_read=$CR_T cache_write=$CW_T"
+                      echo "All runs    : pipeline runs=$RUNS  agent runs=$AGENT_RUNS  successful outcomes=$SUCCESSES"
+                      echo "TOTAL AGENT COST (USD): ${TOTAL_COST}"
+                      echo "COST PER RUN (USD, per agent run): ${AVG}"
+                      echo "COST PER SUCCESSFUL OUTCOME (USD): ${CPS}"
+                      echo "Ledger      : $SAVED"
+                      echo "Last runs:"
+                      tail -n 5 "$LEDGER"
+                      echo "==========================================================="
+                      RUN_COST=$COST
+                      COST_PER_SUCCESS=$CPS
+                      COST_PER_RUN=$AVG
+                    envVariables:
+                      HARNESS_API_KEY: <+secrets.getValue("harness_api_key_secret")>
+                      HARNESS_ACCOUNT: <+account.identifier>
+                      HARNESS_ORG: <+org.identifier>
+                      HARNESS_PROJECT: <+project.identifier>
+                      PIPELINE_ID: <+pipeline.identifier>
+                      EXECUTION_ID: <+pipeline.executionId>
+                      AGENT_STATUS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.status>
+                      A_COST_USD: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.steps.ca_preflight_k8s_upgrade_readiness_1.output.outputVariables.cost_usd>
+                      W_COST_USD: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.output.outputVariables.cost_usd>
+                      A_TOTAL_TURNS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.steps.ca_preflight_k8s_upgrade_readiness_1.output.outputVariables.total_turns>
+                      W_TOTAL_TURNS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.output.outputVariables.total_turns>
+                      A_TOTAL_TOKENS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.steps.ca_preflight_k8s_upgrade_readiness_1.output.outputVariables.total_tokens>
+                      W_TOTAL_TOKENS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.output.outputVariables.total_tokens>
+                      A_INPUT_TOKENS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.steps.ca_preflight_k8s_upgrade_readiness_1.output.outputVariables.input_tokens>
+                      W_INPUT_TOKENS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.output.outputVariables.input_tokens>
+                      A_OUTPUT_TOKENS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.steps.ca_preflight_k8s_upgrade_readiness_1.output.outputVariables.output_tokens>
+                      W_OUTPUT_TOKENS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.output.outputVariables.output_tokens>
+                      A_CACHE_READ_TOKENS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.steps.ca_preflight_k8s_upgrade_readiness_1.output.outputVariables.cache_read_tokens>
+                      W_CACHE_READ_TOKENS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.output.outputVariables.cache_read_tokens>
+                      A_CACHE_CREATION_TOKENS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.steps.ca_preflight_k8s_upgrade_readiness_1.output.outputVariables.cache_creation_tokens>
+                      W_CACHE_CREATION_TOKENS: <+pipeline.stages.Preflight.spec.execution.steps.Worker_Agent.output.outputVariables.cache_creation_tokens>
+                    outputVariables:
+                      - name: RUN_COST
+                      - name: COST_PER_SUCCESS
+                      - name: COST_PER_RUN
+                      - name: TOTAL_COST
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+                  when:
+                    stageStatus: All
+        delegateSelectors:
+          - helm-delegate
+  notificationRules:
+    - name: Preflight Result
+      identifier: Preflight_Result
+      pipelineEvents:
+        - type: PipelineSuccess
+        - type: PipelineFailed
+      notificationMethod:
+        type: Email
+        spec:
+          userGroups:
+            - KubePilotsUserGroup
+          recipients:
+            - pragati.s.saxena@avyka.com
+      enabled: true
+  variables:
+    - name: current_version
+      type: String
+      description: Current Kubernetes minor version of the cluster, e.g. 1.34
+      required: true
+      value: <+input>
+    - name: target_version
+      type: String
+      description: Kubernetes minor version to plan up to, e.g. 1.35
+      required: true
+      value: <+input>
+    - name: target_env
+      type: String
+      description: Environment to assess. Set by input set.
+      required: true
+      value: <+input>.allowedValues(prod-eks,staging-gke,dev-aks,onprem-k8s,minikube)
+    - name: platform
+      type: String
+      description: Cluster platform. Set by input set; must match target_env.
+      required: true
+      value: <+input>.allowedValues(EKS,GKE,AKS,SELF_MANAGED,MINIKUBE)
+    - name: cluster_name
+      type: String
+      description: Cluster name, used in reports only.
+      required: false
+      value: <+input>
+    - name: repos
+      type: String
+      description: Repos for the agent to scan and raise PRs in (JSON).
+      value: "[{\"name\":\"k8s-microservices-app\",\"provider\":\"github\",\"path\":\"/harness\"}]"
+    - name: app_repo_map_path
+      type: String
+      description: File mapping namespaces/app labels to their source repo.
+      value: /harness/preflight-config/app-repo-map.json
+    - name: deprecation_map_path
+      type: String
+      description: File listing deprecated/removed APIs per Kubernetes version.
+      value: /harness/preflight-config/deprecation-map.json
+    - name: notify_usergroup
+      type: String
+      description: User group for approval and result notifications.
+      value: KubePilotsUserGroup
+    - name: max_fix_attempts
+      type: String
+      description: Max times the agent retries a fix that fails validation before reporting it unfixed.
+      value: "2"
+    - name: max_retries
+      type: String
+      description: Max retries for a failed command before recording a coverage gap.
+      value: "2"
+    - name: max_turns
+      type: String
+      description: Max turns the agent may take in one run.
+      value: "50"
+  identifier: PreflightAgentPipelineKubePilot_Harshita
+  name: Preflight-Agent-Pipeline-KubePilot  - Harshita

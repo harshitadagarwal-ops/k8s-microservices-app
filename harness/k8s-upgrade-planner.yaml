@@ -1,0 +1,147 @@
+# New Preflight pipeline, based on the team's K8sPreflightAgentPipeline.
+#
+# Differences from the original:
+#   - distinct name/identifier (safe to create alongside the existing one)
+#   - agent step wired with agentSettings (current_version/target_version/target_env)
+#     mapped from pipeline variables -- ready for when it's enabled
+#   - agent step kept DISABLED (condition: "false") as requested
+#   - version defaults reflect the real cluster (1.34), no 'v' prefix
+#   - target_env constrained with allowedValues
+#
+# NOTE: agentSettings keys must match the Input names defined on the agent
+# (agentName below). Adjust keys if the agent uses different input identifiers.
+
+pipeline:
+  name: K8s-Preflight-Agent-Pipeline-KubePilot
+  identifier: K8sPreflightAgentPipelineKubePilot
+  projectIdentifier: Team_KubePilots
+  orgIdentifier: Worker_Agents_Hackathon
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        # Clone the real GitHub repo via the Git connector (NOT Harness-hosted
+        # Code). connectorRef must be the connector's identifier; repoName must
+        # match the GitHub repo exactly (note the plural: k8s-microservices-app).
+        # If the connector is Repo-level (points directly at one repo), repoName
+        # may be omitted.
+        connectorRef: k8smicroserviceapp
+        repoName: k8s-microservices-app
+        build: <+input>
+  stages:
+    - stage:
+        name: Build
+        identifier: Build
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: false
+          execution:
+            steps:
+              - parallel:
+                  - step:
+                      type: Gitleaks
+                      name: Gitleaks
+                      identifier: Gitleaks
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: repository
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+                  - step:
+                      type: Semgrep
+                      name: Semgrep_1
+                      identifier: Semgrep_1
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: repository
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+                  - step:
+                      type: OsvScanner
+                      name: OsvScanner_1
+                      identifier: OsvScanner_1
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: repository
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+              - step:
+                  type: Agent
+                  name: Worker Agent
+                  identifier: Worker_Agent
+                  spec:
+                    agentName: ca_preflight_k8s_upgrade_readiness_agent
+                    # Pass runtime inputs to the agent. These keys must match the
+                    # Input names defined on the agent in the agent builder.
+                    agentSettings:
+                      current_version: <+pipeline.variables.current_version>
+                      target_version: <+pipeline.variables.target_version>
+                      target_env: <+pipeline.variables.target_env>
+                  when:
+                    stageStatus: Success
+                    # DISABLED on purpose. Set to "true" to actually run the agent.
+                    condition: "false"
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+    - stage:
+        name: Approval
+        identifier: Approval
+        description: ""
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Harness Approval
+                  identifier: Harness_Approval
+                  type: HarnessApproval
+                  timeout: 1d
+                  spec:
+                    approvalMessage: |-
+                      Please review the Preflight findings, readiness score,
+                      upgrade plan, and fix PR, then approve or reject.
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+                      userGroups:
+                        - KubePilotsUserGroup
+                    isAutoRejectEnabled: false
+                    approverInputs: []
+        tags: {}
+  variables:
+    - name: current_version
+      type: String
+      description: Current Kubernetes minor version of the target cluster.
+      required: true
+      value: <+input>
+    - name: target_version
+      type: String
+      description: Desired Kubernetes minor version to plan up to.
+      required: true
+      value: <+input>
+    - name: target_env
+      type: String
+      description: Which environment bundle to assess.
+      required: true
+      value: <+input>.allowedValues(prod-eks,staging-gke,dev-aks,onprem)
