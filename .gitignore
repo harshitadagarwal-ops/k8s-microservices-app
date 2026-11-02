@@ -5,7 +5,7 @@
 .vscode/
 # Harness delegate manifest — contains the delegate token
 harness-delegate.yaml
-
+.env
 # Python bytecode
 __pycache__/
 *.pyc
