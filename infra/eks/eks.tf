@@ -1,6 +1,6 @@
-# kube-pilot EKS 1.32 cluster — deployable and reachable.
+# kube-pilot EKS cluster — deployable and reachable.
 #   - public API endpoint        -> so kubectl / Argo CD work from your laptop
-#   - AL2023 node AMI            -> current default, valid on 1.32..1.36
+#   - Graviton (ARM) + Spot nodes -> cost-optimized (see node group below)
 #   - EBS CSI driver add-on + IRSA -> so the app's MySQL gp3 PVC can bind
 
 module "eks" {
@@ -41,8 +41,17 @@ module "eks" {
   }
 
   eks_managed_node_groups = {
+    # Graviton (ARM) + Spot for cost savings:
+    #   - AL2023_ARM_64_STANDARD  -> Graviton AMI (~20% cheaper than x86)
+    #   - capacity_type SPOT       -> up to ~70% off on-demand
+    #   - t4g.medium               -> Graviton equiv of t3.medium (2 vCPU / 4 GiB)
+    #     kept at medium (not smaller) because node memory requests ~83% and the
+    #     Harness delegate alone requests ~2Gi; smaller would break scheduling.
+    # NOTE: all container images must have arm64 builds (app images rebuilt
+    # multi-arch; delegate image is already multi-arch).
     general = {
-      ami_type       = "AL2023_x86_64_STANDARD"
+      ami_type       = "AL2023_ARM_64_STANDARD"
+      capacity_type  = "SPOT"
       instance_types = var.node_instance_types
 
       min_size     = var.node_min_size

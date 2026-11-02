@@ -3,10 +3,11 @@ cluster_name    = "kube-pilot"
 cluster_version = "1.34"
 vpc_cidr        = "10.0.0.0/16"
 
-node_instance_types = ["t3.medium"]
-node_min_size       = 1
+# Graviton (ARM) + Spot node group.
+node_instance_types = ["t4g.medium", "t4g.large"]
+node_min_size       = 2
 node_max_size       = 3
-node_desired_size   = 1
+node_desired_size   = 2
 
 # AWS Load Balancer Controller (ALB/NLB for Ingress). Set false to skip.
 enable_lb_controller        = true
