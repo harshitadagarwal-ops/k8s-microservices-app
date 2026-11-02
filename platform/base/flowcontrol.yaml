@@ -1,6 +1,6 @@
 # F02: Using removed flowcontrol.apiserver.k8s.io/v1beta3 API version.
 # Removed in Kubernetes 1.32. Causes Argo CD sync failure when applied against K8s 1.32+.
-apiVersion: flowcontrol.apiserver.k8s.io/v1beta3
+apiVersion: flowcontrol.apiserver.k8s.io/v1
 kind: PriorityLevelConfiguration
 metadata:
   name: demo-batch-priority
@@ -15,7 +15,7 @@ spec:
         handShakeLength: 5
         queueLengthLimit: 50
 ---
-apiVersion: flowcontrol.apiserver.k8s.io/v1beta3
+apiVersion: flowcontrol.apiserver.k8s.io/v1
 kind: FlowSchema
 metadata:
   name: demo-batch-flowschema
