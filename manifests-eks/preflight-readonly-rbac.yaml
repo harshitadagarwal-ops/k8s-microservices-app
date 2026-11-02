@@ -1,0 +1,126 @@
+# Read-only RBAC for the Preflight worker agent's CI pod.
+#
+# The Harness pipeline runs its build pod as service account
+# `preflight-readonly` in namespace `harness-preflight`. This manifest creates
+# that SA plus a least-privilege ClusterRole for cluster inspection.
+#
+# Least-privilege per the agent instructions:
+#   - read-only (get/list/watch) across the resource types the agent scans
+#   - NO access to Secrets
+#   - NO write/modify/delete on any live resource
+#
+# Apply:  kubectl apply -f manifests-eks/preflight-readonly-rbac.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: harness-preflight
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: preflight-readonly
+  namespace: harness-preflight
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: preflight-readonly
+rules:
+  # Core workloads and cluster objects the agent inspects.
+  # NOTE: "secrets" is deliberately EXCLUDED.
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - namespaces
+      - pods
+      - services
+      - configmaps
+      - persistentvolumeclaims
+      - persistentvolumes
+      - serviceaccounts
+      - endpoints
+      - events
+      - replicationcontrollers
+      - resourcequotas
+      - limitranges
+    verbs: ["get", "list", "watch"]
+  # Workload controllers.
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "statefulsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  # Autoscaling / disruption.
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch"]
+  # Networking (ingress, policies, ingressclasses).
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies", "ingressclasses"]
+    verbs: ["get", "list", "watch"]
+  # API surface discovery — needed to detect deprecated/removed API versions.
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apiregistration.k8s.io"]
+    resources: ["apiservices"]
+    verbs: ["get", "list", "watch"]
+  # RBAC inspection (read-only) — roles/bindings, but NOT secrets.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+  # Storage classes (platform upgrade checks).
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "csidrivers", "csinodes"]
+    verbs: ["get", "list", "watch"]
+  # Flow control (the F02 fixture lives here; agent must detect it).
+  - apiGroups: ["flowcontrol.apiserver.k8s.io"]
+    resources: ["flowschemas", "prioritylevelconfigurations"]
+    verbs: ["get", "list", "watch"]
+  # Admission webhooks (compatibility checks).
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingwebhookconfigurations", "mutatingwebhookconfigurations"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: preflight-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: preflight-readonly
+subjects:
+  - kind: ServiceAccount
+    name: preflight-readonly
+    namespace: harness-preflight
+---
+# Non-resource URL access for the deprecated-APIs / metrics scan.
+# The agent reads the API server's /metrics endpoint (e.g. to verify the
+# Endpoints deprecation finding). Granted separately because non-resource URLs
+# can't be expressed in the resource-based ClusterRole above. Still read-only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: preflight-metrics-read
+rules:
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: preflight-metrics-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: preflight-metrics-read
+subjects:
+  - kind: ServiceAccount
+    name: preflight-readonly
+    namespace: harness-preflight
