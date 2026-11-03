@@ -7,6 +7,9 @@
 harness-delegate.yaml
 .env
 .kiro/*
+# Claude/agent local settings may contain tokens
+.claude/settings.local.json
+.claude/
 # Python bytecode
 __pycache__/
 *.pyc

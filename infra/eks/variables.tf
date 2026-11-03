@@ -24,10 +24,17 @@ variable "vpc_cidr" {
 
 variable "node_instance_types" {
   type = list(string)
-  # Graviton (ARM) instances. t4g.medium = 2 vCPU / 4 GiB (Graviton equiv of
-  # t3.medium). Multiple types improve Spot availability; all must be arm64.
-  default     = ["t4g.medium", "t4g.large"]
-  description = "Graviton (ARM) EC2 instance types for the managed node group."
+  # Graviton (ARM) instances, ALL >= 2 vCPU / >= 4 GiB. The Harness delegate
+  # requests cpu:1 + mem:2Gi; 1-vCPU ".medium" types can't fit it alongside
+  # system pods ("Insufficient cpu"), so only .large and up are used here.
+  # A wide pool across families keeps Spot fulfillable. All must be arm64.
+  default = [
+    "t4g.large", "t4g.xlarge",
+    "m6g.large", "m7g.large",
+    "c6g.large", "c7g.large",
+    "r6g.large",
+  ]
+  description = "Graviton (ARM) instance types (>=2 vCPU) for the node group; wide pool for Spot availability."
 }
 
 variable "node_min_size" {
