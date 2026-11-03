@@ -70,6 +70,23 @@ Pipeline/input-set YAML is in `harness/`. Reconnect connectors if needed; the
 cluster endpoint is stable (same cluster name) but the API server cert/endpoint
 changes on recreate, so the Kubernetes connector may need a re-test.
 
+## Teardown leftovers (as of last destroy)
+
+The destroy removed ALL billable resources (EKS cluster, nodes, NAT, ALB, EBS).
+Two harmless (free) leftovers remain because this user can't delete IAM / and the
+ECR repos are intentionally kept:
+
+- **IAM roles/policies + OIDC provider** (kube-pilot-*, general-eks-node-group-*).
+  Free. `terraform destroy` can't remove them (iam:DetachRolePolicy denied).
+  They may get reused on rebuild, or an admin can delete them.
+- **Leftover VPC** `vpc-0351908d457ff85fc` with 2 private subnets. Free (no NAT/EIP).
+  BEFORE rebuild, either delete it manually (subnets -> route tables -> vpc) OR
+  let `terraform apply` create a fresh VPC (may need the old one gone first to
+  avoid CIDR/name conflicts). Terraform state no longer references most resources,
+  so a clean `terraform apply` should recreate everything.
+- **ECR repos kept** (three-tier/frontend, three-tier/backend) with multi-arch
+  images — reused on rebuild, no image rebuild needed.
+
 ## Notes / gotchas
 - Nightly `avyka-management-auto-stop` scales the node group to 0 (~20:00 IST).
   Scale back up: `aws eks update-nodegroup-config --cluster-name kube-pilot
