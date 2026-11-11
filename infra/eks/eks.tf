@@ -68,7 +68,9 @@ module "ebs_csi_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.44"
 
-  role_name             = "${var.cluster_name}-ebs-csi"
+  # "-v2": the original kube-pilot-ebs-csi role is orphaned in IAM (this user
+  # can't delete or re-trust IAM roles), so rebuilds use a fresh role name.
+  role_name             = "${var.cluster_name}-ebs-csi-v2"
   attach_ebs_csi_policy = true
 
   oidc_providers = {

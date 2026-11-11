@@ -12,7 +12,9 @@ module "lb_controller_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.44"
 
-  role_name                              = "${var.cluster_name}-lb-controller"
+  # "-v2": the original kube-pilot-lb-controller role is orphaned in IAM (this
+  # user can't delete or re-trust IAM roles), so rebuilds use a fresh role name.
+  role_name                              = "${var.cluster_name}-lb-controller-v2"
   attach_load_balancer_controller_policy = true
 
   oidc_providers = {
