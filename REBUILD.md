@@ -95,3 +95,45 @@ ECR repos are intentionally kept:
 - Node pool is Spot: restricted to >=2 vCPU types so the delegate (cpu:1) fits.
 - IAM delete is NOT granted to this user, so `terraform destroy` may leave IAM
   roles/OIDC behind — an admin cleans those, or they get reused on rebuild.
+
+## Rebuild #2 learnings (IAM limits) — READ BEFORE THE NEXT REBUILD
+
+This user can CREATE IAM roles/OIDC providers but cannot DELETE them or UPDATE
+role trust policies (`iam:DeleteOpenIDConnectProvider`, `iam:UpdateAssumeRolePolicy`,
+`iam:DetachRolePolicy` are not granted). A new cluster gets a NEW OIDC issuer URL,
+so a plain `terraform apply` after a destroy plans to REPLACE the OIDC provider and
+UPDATE the two IRSA role trust policies — both of which fail with AccessDenied.
+
+What was done on rebuild #2 (worked, plan was 36 add / 0 change / 0 destroy):
+
+1. Back up state: `terraform state pull > $env:TEMP\kube-pilot-state-backup.json`
+   (the S3 state bucket is also versioned).
+2. Forget the stale IAM objects (they stay in AWS as free orphans):
+   ```powershell
+   terraform state rm 'module.eks.aws_iam_openid_connect_provider.oidc_provider[0]' `
+     'module.ebs_csi_irsa.aws_iam_role.this[0]' `
+     'module.ebs_csi_irsa.aws_iam_role_policy_attachment.ebs_csi[0]' `
+     'module.lb_controller_irsa[0].aws_iam_role.this[0]' `
+     'module.lb_controller_irsa[0].aws_iam_role_policy_attachment.load_balancer_controller[0]'
+   ```
+3. Bump the IRSA role names so the create doesn't collide with the orphans
+   (`eks.tf` / `loadbalancer.tf`): currently `-ebs-csi-v2` and `-lb-controller-v2`.
+   The NEXT rebuild must bump again (`-v3`) and repeat step 2 for the v2 objects.
+4. `terraform plan "-out=rebuild.tfplan"` — quote `-out=` in PowerShell, otherwise it
+   fails with "Too many command line arguments". Confirm 0 change / 0 destroy.
+5. `terraform apply rebuild.tfplan`.
+
+Permanent fix: ask an admin to grant `iam:DeleteOpenIDConnectProvider` and
+`iam:UpdateAssumeRolePolicy` (narrow, much safer than full IAM delete), after which
+a normal `terraform destroy` / `apply` cycle works with no state surgery.
+
+Other notes from this rebuild:
+- The leftover VPC + private subnets + security groups from the previous destroy were
+  REUSED by Terraform automatically (still in state) — no manual VPC cleanup needed.
+  This supersedes the "delete the VPC first" advice in the section above.
+- Before `terraform destroy`, delete the app Ingress first (`kubectl delete -k
+  manifests-eks/`) so the AWS LB Controller removes the ALB. A stray ALB holds ENIs in
+  the public subnets and makes the subnet/IGW destroy hang.
+- The Harness K8s connector (`kube-pilot-avyka-eks`) uses the delegate's in-cluster
+  identity, so it needs no endpoint changes after a rebuild — just re-test it.
+- The ALB DNS name changes on every rebuild: `kubectl get ingress -n demo`.
