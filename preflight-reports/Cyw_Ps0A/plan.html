@@ -1,0 +1,82 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.32 to 1.39</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan Cyw_Ps0ARUKgRzEtaCOLTA</p>
+<p><span class=zAMBER>AMBER</span> readiness 57 now, 87 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.33</td><td>OK</td><td>Requires the flowcontrol.apiserver.k8s.io/v1 fix in this PR to be merged first (v1beta3 was removed in 1.32)</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.34</td><td>OK</td><td>No blockers found in the scanned facts or repo for this hop</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.35</td><td>OK</td><td>No blockers found in the scanned facts or repo for this hop</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.36</td><td>OK</td><td>No blockers found in the scanned facts or repo for this hop</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.37</td><td>FLAGGED</td><td>AL2023 node AMI documented valid for 1.32..1.36 only (infra/eks/eks.tf comment) - validate AMI support before this hop</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.38</td><td>FLAGGED</td><td>AL2023 node AMI documented valid for 1.32..1.36 only (infra/eks/eks.tf comment) - validate AMI support before this hop</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.39</td><td>FLAGGED</td><td>AL2023 node AMI documented valid for 1.32..1.36 only (infra/eks/eks.tf comment) - validate AMI support before this hop</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.35</td><td>Node pool catches up to 1.35 once control plane reaches 1.35 (kubelet staying within 3 minor versions behind kube-apiserver, the documented Kubernetes/EKS version-skew limit)</td></tr><tr><td>1.38</td><td>Node pool catches up to 1.38 once control plane reaches 1.38 (same 3-minor-version skew limit)</td></tr><tr><td>1.39</td><td>Final node roll to match target control plane version 1.39</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>Configured CURRENT_VERSION 1.32 does not match the live cluster (v1.34.12) or Terraform desired state (1.34) - confirm the real baseline before executing this plan</li><li>EKS 1.32 standard support already ended 2026-03-23; cluster is running on extended support until 2027-03-23 (endoflife.date, field eol/extendedSupport)</li><li>AL2023 node AMI documented valid for 1.32..1.36 only (infra/eks/eks.tf); target 1.39 needs AMI validation for hops 1.37-1.39</li><li>core/v1 Endpoints API still in live and repo use with no official removal date; plan migration to discovery.k8s.io/v1 EndpointSlice (legacy-endpoints-cronjob.yaml, service-inventory/base/rbac.yaml)</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>Removed API flowcontrol.apiserver.k8s.io/v1beta3 (kind FlowSchema) in repo: platform/base/flowcontrol.yaml, platform/flowcontrol/base/flowschema.yaml - removed in Kubernetes 1.32</td><td>15</td><td>yes</td></tr><tr><td>Removed API flowcontrol.apiserver.k8s.io/v1beta3 (kind PriorityLevelConfiguration) in repo: platform/base/flowcontrol.yaml, platform/flowcontrol/base/prioritylevel.yaml - removed in Kubernetes 1.32</td><td>15</td><td>yes</td></tr><tr><td>Deprecated core/v1 Endpoints API in live use (deprecated_apis.json) and in repo (platform/base/legacy-endpoints-cronjob.yaml, platform/service-inventory/base/rbac.yaml); no official removal release yet, no safe automated fix</td><td>3</td><td>no</td></tr><tr><td>Platform prerequisite: AL2023 node AMI documented valid for 1.32..1.36 only (infra/eks/eks.tf comment); target 1.39 is outside that documented range</td><td>5</td><td>no</td></tr><tr><td>Platform prerequisite: configured CURRENT_VERSION 1.32 does not match the live scanned cluster version v1.34.12 (cluster_version.json) or the Terraform desired state 1.34 (infra/eks/terraform.tfvars)</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>EXTENDED</td><td>2026-03-23</td><td>2027-03-23</td></tr><tr><td>target</td><td>UNKNOWN</td><td></td><td></td></tr></table><p>Urgency: CRITICAL</p>
+<h2>Coverage gaps</h2><ul><li class=mute>None</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: 1.32 -&gt; 1.39
+
+Cluster: kube-pilot | Platform: EKS | Env: prod-eks | Scan: Cyw_Ps0ARUKgRzEtaCOLTA
+
+Readiness: **AMBER** — score 57 now, 87 after the fixes in the pull request (PR needs review and merge).
+
+## Baseline check (ASSUMED risk, VERIFIED from facts)
+- `CURRENT_VERSION` input is 1.32, but `cluster_version.json` (live, VERIFIED) shows the server is
+  already `v1.34.12-eks-577a51e`, and `infra/eks/terraform.tfvars` (repo, VERIFIED) declares
+  `cluster_version = &quot;1.34&quot;`. Nodes (`nodes.json`, VERIFIED) are at kubelet v1.34.12, in sync with
+  the control plane — no live skew issue today. Confirm which baseline is correct before running this
+  plan; hops below follow the configured CURRENT_VERSION (1.32) to TARGET_VERSION (1.39) as instructed.
+
+## Control plane hops (every minor)
+| To | Status | Notes |
+|---|---|---|
+| 1.33 | OK | Requires the flowcontrol.apiserver.k8s.io/v1 fix in this PR merged first (v1beta3 was removed in 1.32) |
+| 1.34 | OK | No blockers found in the scanned facts or repo |
+| 1.35 | OK | No blockers found in the scanned facts or repo |
+| 1.36 | OK | No blockers found in the scanned facts or repo |
+| 1.37 | FLAGGED | AL2023 node AMI documented valid for 1.32..1.36 only (infra/eks/eks.tf comment, VERIFIED repo data) — validate AMI support before this hop |
+| 1.38 | FLAGGED | Same AMI caveat |
+| 1.39 | FLAGGED | Same AMI caveat |
+
+Release notes link for every EKS hop: https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
+
+## Node pool hops (skew limit used: 3 minor versions, the documented Kubernetes/EKS version-skew policy — kubelet may lag kube-apiserver by up to 3 minors)
+| To | Notes |
+|---|---|
+| 1.35 | Catch up once control plane reaches 1.35 (keeps skew &lt;= 3 minors) |
+| 1.38 | Catch up once control plane reaches 1.38 |
+| 1.39 | Final roll to match target |
+
+## Platform checks (EKS)
+- IRSA: `enable_irsa = true` in infra/eks/eks.tf (VERIFIED repo). Pod Identity not configured — ASSUMED not in use.
+- Node image: Amazon Linux 2023 (nodes.json, VERIFIED). Repo comment states AL2023 is &quot;valid on 1.32..1.36&quot; (infra/eks/eks.tf, VERIFIED) — ASSUMED this still holds for 1.37-1.39; treat as a prerequisite to confirm.
+- Add-ons (addons.json, VERIFIED): aws-load-balancer-controller v2.8.1, coredns v1.12.4, ebs-csi-driver v1.67.2, vpc-cni v1.22.4, kube-proxy v1.34.6. No compatibility matrix was fetched (out of allowed domains) — compatibility with 1.35-1.39 is ASSUMED unverified, recheck via each add-on&#x27;s own release notes before each hop.
+
+## Risk narrative
+- **VERIFIED (repo + deprecation guide)**: `flowcontrol.apiserver.k8s.io/v1beta3` (FlowSchema, PriorityLevelConfiguration) was removed in Kubernetes 1.32 and is still referenced in `platform/base/flowcontrol.yaml`, `platform/flowcontrol/base/flowschema.yaml` and `platform/flowcontrol/base/prioritylevel.yaml`. Fixed and validated in this PR (replaced with `v1`, the guide&#x27;s documented replacement).
+- **VERIFIED (live scan + repo)**: core/v1 `Endpoints` API is deprecated (flagged live in `deprecated_apis.json`) with no formal removal release yet, so the deprecation guide gives no replacement apiVersion. Used by `platform/base/legacy-endpoints-cronjob.yaml` (polls `kubectl get endpoints` every 5 minutes) and `platform/service-inventory/base/rbac.yaml`. Needs a human-authored migration to `discovery.k8s.io/v1` EndpointSlice — not patched automatically.
+- **VERIFIED (endoflife.date)**: EKS 1.32 standard support ended 2026-03-23 (`eol` field); extended support runs to 2027-03-23 (`extendedSupport` field). Today is 2026-11-11, so standard support has already lapsed — urgency CRITICAL. Target 1.39 is not yet a published EKS cycle in endoflife.date — support status UNKNOWN, recheck closer to the upgrade.
+- **ASSUMED**: add-on and CRD compatibility across hops 1.33-1.39 (no compatibility matrix fetched).
+
+## Owners to warn (app-repo map, derived — no CODEOWNERS file found in the repo, so owners are unknown)
+| Namespace | Files | Owners |
+|---|---|---|
+| argocd | argocd/*/apps.yaml, gitops/dev-aks/apps.yaml | unknown |
+| demo | argocd/*/apps.yaml, gitops/dev-aks/apps.yaml | unknown |
+| default | argocd/*/apps.yaml, platform/base/flowcontrol.yaml | unknown |
+| cert-manager | argocd/*/apps.yaml, gitops/dev-aks/apps.yaml | unknown |
+| ingress-nginx | argocd/*/apps.yaml, gitops/dev-aks/apps.yaml | unknown |
+| reporting | gitops/onprem/apps.yaml, platform/flowcontrol/base/flowschema.yaml, platform/service-inventory/base/* | unknown |
+| harness-preflight | harness/PreflightAgentPipelineKubePilot_Harshita.yaml, manifests-eks/preflight-readonly-rbac.yaml | unknown |
+
+## Score
+- Deductions: removed API FlowSchema v1beta3 (-15, fixed), removed API PriorityLevelConfiguration
+  v1beta3 (-15, fixed), deprecated Endpoints API in use (-3, unfixed), AL2023 AMI range prerequisite
+  (-5, unfixed), CURRENT_VERSION/live-version mismatch prerequisite (-5, unfixed).
+- initial = 57, projected after this PR&#x27;s fixes = 87. Zone AMBER: merge the PR, then re-run a scan
+  to confirm, and resolve the remaining unfixed items (Endpoints migration, AMI validation,
+  baseline confirmation) before starting the hops.
+
+## Coverage gaps
+None — all cluster fact files (`cluster_version`, `nodes`, `deprecated_apis`, `addons`, `crds`,
+`namespaces`) read with status `ok`; both maps were generated successfully since the configured
+paths (`/harness/preflight-config/*.json`) did not exist.
+
+Plan only: nothing was upgraded, no cluster writes were made.
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
