@@ -18,3 +18,7 @@ __pycache__/
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# Terraform plan files and apply/destroy logs (plans can contain sensitive values)
+*.tfplan
+infra/**/*.log
