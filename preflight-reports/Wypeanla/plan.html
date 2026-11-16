@@ -1,0 +1,78 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.35 to 1.38</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan WypeanlaS_2PwjT6w5h0Ew</p>
+<p><span class=zAMBER>AMBER</span> readiness 40 now, 70 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.36</td><td>FLAGGED</td><td>ASSUMED first hop from the CURRENT_VERSION input (1.35); FLAGGED because the scan shows the live control plane is actually v1.32.13, three minors behind the stated current version -- verify before scheduling</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.37</td><td>OK</td><td>No removed APIs beyond what the deprecation guide already covers (up to 1.32) were found unfixed for this hop in the cloned repo</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.38</td><td>FLAGGED</td><td>FLAGGED: 1.38 is not yet present in the fetched EKS support data as of this scan -- confirm EKS has released and documented 1.38 before this hop</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.37</td><td>Single consolidated node pool roll partway through, staying within the Kubernetes kubelet skew limit of n-3 minor versions behind the control plane (skew limit used: kubelet may trail kube-apiserver by up to 3 minor versions)</td></tr><tr><td>1.38</td><td>Final node pool roll to match the control plane at 1.38, required once the control plane is more than 3 minors ahead of the current kubelet version</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>PodSecurityPolicy (policy/v1beta1) in charts/three-tier/templates/podsecuritypolicy.yaml has no replacement API and is enabled for prod-eks -- it is already non-functional on the live v1.32.13 cluster and needs a human migration to Pod Security Admission or an admission-controller policy</li><li>CURRENT_VERSION input (1.35) does not match the scanned cluster&#x27;s actual server version (v1.32.13-eks) -- confirm which is authoritative before executing this hop plan</li><li>TARGET_VERSION 1.38 is not yet listed in EKS support data (endoflife.date latest cycle is 1.37) -- confirm it is a released, supported EKS version</li><li>IRSA / EKS Pod Identity configuration was not collected by the cluster scan -- platform prerequisite unverified (ASSUMED only)</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>Removed API extensions/v1beta1 Ingress in charts/three-tier/templates/admin-ingress.yaml (removed in Kubernetes 1.22)</td><td>15</td><td>yes</td></tr><tr><td>Removed API autoscaling/v2beta1 HorizontalPodAutoscaler in charts/three-tier/templates/backend-hpa.yaml (removed in Kubernetes 1.25)</td><td>15</td><td>yes</td></tr><tr><td>Removed API batch/v1beta1 CronJob in charts/three-tier/templates/mysql-backup-cronjob.yaml (removed in Kubernetes 1.25)</td><td>15</td><td>yes</td></tr><tr><td>Removed API policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy.yaml (removed in Kubernetes 1.25, no replacement API; enabled for prod-eks)</td><td>15</td><td>no</td></tr><tr><td>coverage gap: IRSA / EKS Pod Identity service-account configuration was not collected by the cluster scan</td><td>5</td><td>no</td></tr><tr><td>coverage gap: TARGET_VERSION 1.38 is not listed in the endoflife.date EKS support data (latest cycle returned is 1.37)</td><td>5</td><td>no</td></tr><tr><td>coverage gap: CURRENT_VERSION input (1.35) does not match the scanned cluster_version.json server version (v1.32.13-eks) -- confirm the authoritative current version before executing this plan</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>STANDARD</td><td>2027-03-27</td><td>2028-03-27</td></tr><tr><td>target</td><td>UNKNOWN</td><td>UNKNOWN</td><td>UNKNOWN</td></tr></table><p>Urgency: MEDIUM</p>
+<h2>Coverage gaps</h2><ul><li>needs scan (read only): IRSA / EKS Pod Identity service-account annotations and OIDC provider configuration</li><li>TARGET_VERSION 1.38 not found in endoflife.date EKS support data (latest listed cycle: 1.37)</li><li>CURRENT_VERSION input (1.35) does not match scanned cluster_version.json server version (v1.32.13-eks)</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: 1.35 to 1.38
+
+Cluster: kube-pilot | Platform: EKS | Env: prod-eks | Scan: WypeanlaS_2PwjT6w5h0Ew
+
+**Readiness: AMBER** -- score 40 now, 70 after the fixes in the accompanying pull request.
+
+## Important data note (VERIFIED from the scan)
+The scanned cluster (`cluster_version.json`) reports server **v1.32.13-eks-91f89a9**, with both
+nodes&#x27; kubelet at v1.32.13. This does **not** match the CURRENT_VERSION input of 1.35 given to this
+run. The hop plan below follows the CURRENT_VERSION/TARGET_VERSION inputs as instructed, but this
+mismatch must be resolved (confirm which version is authoritative) before anyone acts on it.
+
+## Control plane hops (one minor at a time)
+| To | Status | Notes | Release notes |
+|---|---|---|---|
+| 1.36 | FLAGGED | ASSUMED first hop from the CURRENT_VERSION input (1.35); FLAGGED because the scan shows the live control plane is actually v1.32.13, three minors behind the stated current version -- verify before scheduling | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html |
+| 1.37 | OK | No removed APIs beyond what the deprecation guide already covers (up to 1.32) were found unfixed for this hop in the cloned repo | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html |
+| 1.38 | FLAGGED | FLAGGED: 1.38 is not yet present in the fetched EKS support data as of this scan -- confirm EKS has released and documented 1.38 before this hop | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html |
+
+## Node pool hops
+Skew limit used: kubelet may trail the control plane by up to 3 minor versions (Kubernetes version
+skew policy, n-3). This allows fewer node rolls than control-plane hops.
+| To | Notes |
+|---|---|
+| 1.37 | Single consolidated node pool roll partway through, staying within the Kubernetes kubelet skew limit of n-3 minor versions behind the control plane (skew limit used: kubelet may trail kube-apiserver by up to 3 minor versions) |
+| 1.38 | Final node pool roll to match the control plane at 1.38, required once the control plane is more than 3 minors ahead of the current kubelet version |
+
+## Platform checks (EKS) -- ASSUMED unless marked VERIFIED
+- IRSA / Pod Identity: ASSUMED -- not collected by the scan (coverage gap).
+- Node AMI: VERIFIED -- both nodes run Amazon Linux 2023 (AL2023), arm64, containerd 2.3.7, ready.
+- Add-on images (VERIFIED from addons.json): aws-load-balancer-controller v2.8.1, coredns
+  v1.11.4-eksbuild.104, ebs-csi-driver v1.68.0 (+ sidecars), aws-node (VPC CNI) v1.22.4-eksbuild.14,
+  kube-proxy v1.32.13-eksbuild.72. No incompatibility with the target evidenced without fetching
+  release notes (not fetched per the no-invented-data rule) -- treat as ASSUMED compatible.
+
+## Risk narrative
+- VERIFIED (live scan, `deprecated_apis.json`): no removed/deprecated API group is currently being
+  requested against the live API server.
+- VERIFIED (repo scan): three removed APIs found active for `prod-eks`
+  (`values-prod-eks.yaml` has `admin.enabled`, `backend.autoscaling.enabled` and
+  `mysql.backup.enabled` all `true`): `extensions/v1beta1` Ingress, `autoscaling/v2beta1` HPA,
+  `batch/v1beta1` CronJob. All three were patched and validated in this run (see the pull request).
+- VERIFIED (repo scan): `policy/v1beta1` PodSecurityPolicy is also enabled for `prod-eks`
+  (`podSecurityPolicy.enabled: true`), removed in Kubernetes 1.25 with no replacement API. It is
+  already broken on the live v1.32.13 cluster and needs a human migration to Pod Security Admission
+  or an admission-controller policy -- not patched automatically.
+- Owners to warn: unknown -- no CODEOWNERS file was found in this repo (app-repo map owners list is
+  empty), so route the pull request to whoever owns `charts/three-tier` manually.
+
+## Support status
+- Current (1.35): STANDARD support, standard support ends 2027-03-27, extended support ends
+  2028-03-27 (source: endoflife.date amazon-eks API, fields `eol` and `extendedSupport`).
+- Target (1.38): UNKNOWN -- not yet listed in the endoflife.date EKS data as of this scan (latest
+  listed cycle is 1.37).
+- Urgency: MEDIUM (standard support for the current version ends in under 180 days but more than 90).
+- Fees: UNKNOWN -- no official AWS page with fee figures was fetched in this run.
+
+## Coverage gaps
+- needs scan (read only): IRSA / EKS Pod Identity service-account annotations and OIDC provider configuration
+- TARGET_VERSION 1.38 not found in endoflife.date EKS support data (latest listed cycle: 1.37)
+- CURRENT_VERSION input (1.35) does not match scanned cluster_version.json server version (v1.32.13-eks)
+
+## Pull request
+See `prs` in output.json / the PR link appended after this plan was built. Patched files: admin-ingress.yaml,
+backend-hpa.yaml, mysql-backup-cronjob.yaml. Needs human review: podsecuritypolicy.yaml.
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
