@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.32 to 1.37</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan wYB9k6keRhCSTtuZZ7VsBA</p>
+<p><span class=zAMBER>AMBER</span> readiness 46 now, 76 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.33</td><td>OK</td><td>No repo-detected blockers at this hop</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.33.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.33.md</a></td></tr><tr><td>1.34</td><td>OK</td><td>No repo-detected blockers at this hop</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.34.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.34.md</a></td></tr><tr><td>1.35</td><td>FLAGGED</td><td>PodSecurityPolicy (policy/v1beta1) was removed in 1.25 and has no replacement API; it must already be migrated off before any hop at or above 1.25. Since current is 1.32, this is already a blocker now, flagged again here as a checkpoint</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md</a></td></tr><tr><td>1.36</td><td>FLAGGED</td><td>Node pool skew checkpoint: node pool must be rolled to at least 1.33 before or at this hop to stay within the n-3 kubelet skew limit</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md</a></td></tr><tr><td>1.37</td><td>FLAGGED</td><td>Node pool skew checkpoint: node pool must be rolled to at least 1.34 before or at this hop. Confirm EKS managed add-on versions support 1.37 before cutting over</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.33</td><td>Node pool track (skew limit used: Kubernetes n-3, kubelet may trail kube-apiserver by up to 3 minor versions as of Kubernetes 1.28+, ASSUMED general policy). Roll node pool &#x27;general-20261115161132087800000008&#x27; to 1.33 before control plane reaches 1.36 to keep skew &lt;= 3</td></tr><tr><td>1.34</td><td>Roll node pool to 1.34 before control plane reaches 1.37 to keep skew &lt;= 3. Further node rolls to fully close the gap with 1.37 are optional and can follow at the team&#x27;s pace within the skew limit</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>PodSecurityPolicy (policy/v1beta1) in charts/three-tier/templates/podsecuritypolicy.yaml has no replacement API in 1.25+ - needs manual migration to Pod Security Admission / an external policy controller before the 1.25 hop</li><li>EKS managed add-ons (CoreDNS, kube-proxy, VPC CNI, EBS CSI) must be upgraded in step with control-plane hops; versions were not individually checked against each target hop</li><li>IRSA / Pod Identity association was not in the cluster scan - confirm before upgrading nodes that rely on it</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>Ingress charts/three-tier/templates/admin-ingress.yaml uses extensions/v1beta1 (removed 1.22)</td><td>15</td><td>yes</td></tr><tr><td>HorizontalPodAutoscaler charts/three-tier/templates/backend-hpa.yaml uses autoscaling/v2beta1 (removed 1.25)</td><td>15</td><td>yes</td></tr><tr><td>CronJob charts/three-tier/templates/mysql-backup-cronjob.yaml uses batch/v1beta1 (removed 1.25)</td><td>15</td><td>yes</td></tr><tr><td>PodSecurityPolicy charts/three-tier/templates/podsecuritypolicy.yaml uses policy/v1beta1 (removed 1.25, no replacement API - PSP was removed entirely)</td><td>15</td><td>no</td></tr><tr><td>EKS managed add-ons (CoreDNS v1.11.4, kube-proxy v1.32.13, VPC CNI v1.22.4, EBS CSI v1.68.0) must be upgraded in step with each control-plane hop per AWS add-on compatibility policy (ASSUMED, general EKS policy, not individually verified against 1.37)</td><td>4</td><td>no</td></tr><tr><td>IRSA / EKS Pod Identity association details for service accounts were not in the cluster scan</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>EXTENDED</td><td>2026-03-23</td><td>2027-03-23</td></tr><tr><td>target</td><td>STANDARD</td><td>2027-12-01</td><td>2028-12-01</td></tr></table><p>Urgency: CRITICAL</p>
+<h2>Coverage gaps</h2><ul><li>needs scan (read only): IRSA / EKS Pod Identity association details for service accounts</li><li>CODEOWNERS not found in repo - owners for affected namespaces are unknown, not guessed</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: 1.32 -&gt; 1.37 (EKS, prod-eks, cluster kube-pilot)
+
+Scan wYB9k6keRhCSTtuZZ7VsBA | Readiness: **AMBER** (initial 46, projected 76 after the PR fixes)
+
+## Control plane hops (every minor)
+| To | Status | Notes | Release notes |
+|---|---|---|---|
+| 1.33 | OK | No repo-detected blockers at this hop | https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.33.md |
+| 1.34 | OK | No repo-detected blockers at this hop | https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.34.md |
+| 1.35 | FLAGGED | PodSecurityPolicy (policy/v1beta1) was removed in 1.25 and has no replacement API; it must already be migrated off before any hop at or above 1.25. Since current is 1.32, this is already a blocker now, flagged again here as a checkpoint | https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md |
+| 1.36 | FLAGGED | Node pool skew checkpoint: node pool must be rolled to at least 1.33 before or at this hop to stay within the n-3 kubelet skew limit | https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md |
+| 1.37 | FLAGGED | Node pool skew checkpoint: node pool must be rolled to at least 1.34 before or at this hop. Confirm EKS managed add-on versions support 1.37 before cutting over | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html |
+
+## Node pool hops (skew limit used: n-3, kubelet may trail kube-apiserver by up to 3 minor versions, Kubernetes 1.28+ policy, ASSUMED)
+| To | Notes |
+|---|---|
+| 1.33 | Node pool track (skew limit used: Kubernetes n-3, kubelet may trail kube-apiserver by up to 3 minor versions as of Kubernetes 1.28+, ASSUMED general policy). Roll node pool &#x27;general-20261115161132087800000008&#x27; to 1.33 before control plane reaches 1.36 to keep skew &lt;= 3 |
+| 1.34 | Roll node pool to 1.34 before control plane reaches 1.37 to keep skew &lt;= 3. Further node rolls to fully close the gap with 1.37 are optional and can follow at the team&#x27;s pace within the skew limit |
+
+## Platform checks (EKS) - derived from scan, unverified items marked ASSUMED
+- Node OS: Amazon Linux 2023 (arm64), containerd 2.3.7 - VERIFIED from nodes.json, compatible with 1.37.
+- Single node pool `general-20261115161132087800000008`, 2 nodes, kubelet v1.32.13 matching control plane - VERIFIED.
+- IRSA / Pod Identity: not in the cluster scan - ASSUMED unknown, see coverage gaps.
+- EKS managed add-ons (CoreDNS, kube-proxy, VPC CNI, EBS CSI) versions were read from the scan (VERIFIED)
+  but their compatibility with each hop version was not individually checked against AWS&#x27;s add-on
+  compatibility matrix (ASSUMED they need to move in step with each control-plane hop, per general
+  EKS policy).
+
+## Repo findings (k8s-microservices-app, github)
+4 removed Kubernetes APIs found in `charts/three-tier/templates/` (VERIFIED against the official
+deprecation guide). 3 were patched in the accompanying pull request (apiVersion only, no other
+changes); 1 (PodSecurityPolicy) has no replacement API and needs manual migration.
+Owners to warn: unknown - no CODEOWNERS file was found in this repo.
+
+## Support status
+| Version | Status | Standard end | Extended end |
+|---|---|---|---|
+| 1.32 (current) | EXTENDED | 2026-03-23 | 2027-03-23 |
+| 1.37 (target) | STANDARD | 2027-12-01 | 2028-12-01 |
+
+Urgency: CRITICAL - standard support for 1.32 already ended (2026-03-23); the cluster is currently
+running on paid extended support. Fees: UNKNOWN (no fetched official page stated a dollar figure).
+
+## Top blockers
+- PodSecurityPolicy (policy/v1beta1) in charts/three-tier/templates/podsecuritypolicy.yaml has no replacement API in 1.25+ - needs manual migration to Pod Security Admission / an external policy controller before the 1.25 hop
+- EKS managed add-ons (CoreDNS, kube-proxy, VPC CNI, EBS CSI) must be upgraded in step with control-plane hops; versions were not individually checked against each target hop
+- IRSA / Pod Identity association was not in the cluster scan - confirm before upgrading nodes that rely on it
+
+## Coverage gaps
+- needs scan (read only): IRSA / EKS Pod Identity association details for service accounts
+- CODEOWNERS not found in repo - owners for affected namespaces are unknown, not guessed
+
+## Plan only
+Nothing in the live cluster was changed by this agent. The only write made was the pull request
+with the three apiVersion fixes described above.
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
