@@ -1,0 +1,80 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.32 to 1.37</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan by9E8nL2Quq4DPwzEcHj-Q</p>
+<p><span class=zAMBER>AMBER</span> readiness 50 now, 80 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.33</td><td>OK</td><td>Control plane minor hop. Merge the PR&#x27;s apiVersion fixes before starting hops (extensions/v1beta1, autoscaling/v2beta1, batch/v1beta1 are already removed as of the current 1.32 cluster).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.34</td><td>OK</td><td>Control plane minor hop. Merge the PR&#x27;s apiVersion fixes before starting hops (extensions/v1beta1, autoscaling/v2beta1, batch/v1beta1 are already removed as of the current 1.32 cluster).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.35</td><td>OK</td><td>Control plane minor hop. Merge the PR&#x27;s apiVersion fixes before starting hops (extensions/v1beta1, autoscaling/v2beta1, batch/v1beta1 are already removed as of the current 1.32 cluster).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.36</td><td>OK</td><td>Control plane minor hop. Merge the PR&#x27;s apiVersion fixes before starting hops (extensions/v1beta1, autoscaling/v2beta1, batch/v1beta1 are already removed as of the current 1.32 cluster).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.37</td><td>OK</td><td>Control plane minor hop. Merge the PR&#x27;s apiVersion fixes before starting hops (extensions/v1beta1, autoscaling/v2beta1, batch/v1beta1 are already removed as of the current 1.32 cluster).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.34</td><td>Node pool (general-20261115161132087800000008) upgrade after control plane reaches 1.34. Kubelet may lag the control plane by up to 3 minor versions (Kubernetes kubelet-skew policy, ASSUMED - not refetched this run); nodes stay within skew while control plane advances 1.33-&gt;1.34.</td></tr><tr><td>1.37</td><td>Final node pool upgrade to match control plane at 1.37, closing the skew window before the hop plan completes.</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy.yaml (removed in 1.25, no replacement API - needs human migration to Pod Security Admission)</li><li>coverage gap: ServiceAccount IAM annotations for IRSA/Pod Identity were not in the cluster scan, cannot verify this EKS platform prerequisite</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>extensions/v1beta1 Ingress in charts/three-tier/templates/admin-ingress.yaml (removed in 1.22, replace with networking.k8s.io/v1)</td><td>15</td><td>yes</td></tr><tr><td>autoscaling/v2beta1 HorizontalPodAutoscaler in charts/three-tier/templates/backend-hpa.yaml (removed in 1.25, replace with autoscaling/v2)</td><td>15</td><td>yes</td></tr><tr><td>batch/v1beta1 CronJob in charts/three-tier/templates/mysql-backup-cronjob.yaml (removed in 1.25, replace with batch/v1)</td><td>15</td><td>yes</td></tr><tr><td>policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy.yaml (removed in 1.25, no replacement API - needs human migration to Pod Security Admission)</td><td>15</td><td>no</td></tr><tr><td>coverage gap: ServiceAccount IAM annotations for IRSA/Pod Identity were not in the cluster scan, cannot verify this EKS platform prerequisite</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>EXTENDED</td><td>2026-03-23</td><td>2027-03-23</td></tr><tr><td>target</td><td>STANDARD</td><td>2027-12-01</td><td>2028-12-01</td></tr></table><p>Urgency: CRITICAL</p>
+<h2>Coverage gaps</h2><ul><li>needs scan (read only): ServiceAccount IAM role annotations (IRSA/Pod Identity) for EKS platform prerequisite checks</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: 1.32 -&gt; 1.37 (kube-pilot, EKS, prod-eks)
+
+Plan only. Nothing was upgraded and no live resource was modified. Scan `by9E8nL2Quq4DPwzEcHj-Q`.
+
+## Readiness
+- Zone: **AMBER** — readiness 50 now, 80 after the fixes in the pull request (needs PR review and merge).
+- Score caps applied: removed-API findings are capped at 45 points even though 4 distinct findings were found (60 raw); the coverage-gap category added 5 more.
+
+## Control plane hops (one minor per hop)
+| To | Status | Notes |
+|---|---|---|
+| 1.33 | OK | Merge the fix PR first. extensions/v1beta1, autoscaling/v2beta1 and batch/v1beta1 are already removed as of the current 1.32 control plane — they are not fixable &quot;at a future hop&quot;, they are already broken today. |
+| 1.34 | OK | — |
+| 1.35 | OK | — |
+| 1.36 | OK | — |
+| 1.37 | OK | Final target. |
+
+Release links (EKS): https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html for every hop above (per-version EKS release notes live on this single page; not an invented per-hop URL).
+
+## Node pool hops
+Skew limit used: kubelet may lag the control plane by up to 3 minor versions (Kubernetes kubelet-to-control-plane version-skew policy). ASSUMED — not refetched this run, based on general policy knowledge, not verified against a fetched page this run.
+
+| To | Notes |
+|---|---|
+| 1.34 | Upgrade node pool `general-20261115161132087800000008` after control plane reaches 1.34 (both nodes currently kubelet v1.32.13). |
+| 1.37 | Final node pool upgrade to close the skew window with the control plane at 1.37. |
+
+Node facts (VERIFIED from scan): 2 nodes, both kubelet v1.32.13-eks-9adbfea, containerd 2.3.7, Amazon Linux 2023, arm64, pool `general-20261115161132087800000008`, both Ready.
+
+## Platform checks (EKS)
+- IRSA / Pod Identity: ASSUMED only — the cluster scan did not capture ServiceAccount IAM annotations, so this prerequisite could not be verified. Coverage gap recorded.
+- Add-on versions (VERIFIED from scan, compatibility with 1.37 not fetched — ASSUMED current): aws-load-balancer-controller v2.8.1, coredns v1.11.4-eksbuild.104, aws-ebs-csi-driver v1.68.0, amazon-k8s-cni v1.22.4-eksbuild.14, kube-proxy v1.32.13-eksbuild.72. No incompatibility evidence found against these images; recommend checking the EKS add-on compatibility matrix at each hop before upgrading (not fetched here per instructions against fetching large release-note pages).
+- IaC note (VERIFIED from repo, not scored): `infra/eks/variables.tf` has `cluster_version` default `&quot;1.34&quot;`, while the live cluster (`cluster_version.json`) reports `v1.32.13-eks-91f89a9`. Terraform state and the live cluster have drifted; reconcile before using Terraform to drive any future hop.
+
+## Repo findings and fixes (VERIFIED from repo scan)
+Repo: `k8s-microservices-app` (github). 4 distinct removed-API usages found, all already removed as of Kubernetes 1.22-1.25, i.e. already incompatible with the current 1.32 cluster, not just a future hop:
+
+| File | apiVersion found | Removed in | Replacement | Fixed in this PR |
+|---|---|---|---|---|
+| charts/three-tier/templates/admin-ingress.yaml | extensions/v1beta1 (Ingress) | 1.22 | networking.k8s.io/v1 | Yes |
+| charts/three-tier/templates/backend-hpa.yaml | autoscaling/v2beta1 (HPA) | 1.25 | autoscaling/v2 | Yes |
+| charts/three-tier/templates/mysql-backup-cronjob.yaml | batch/v1beta1 (CronJob) | 1.25 | batch/v1 | Yes |
+| charts/three-tier/templates/podsecuritypolicy.yaml | policy/v1beta1 (PodSecurityPolicy) | 1.25 | none (kind removed, no 1:1 replacement) | No — needs human review |
+
+Owners to warn: unknown. No CODEOWNERS file was found in the cloned repo (checked CODEOWNERS, .github/CODEOWNERS, docs/CODEOWNERS); do not guess owners.
+
+Namespaces touched by this app repo (from the generated app-repo map): argocd, demo, default, cert-manager, ingress-nginx, reporting, harness-preflight.
+
+## Support status (endoflife.date, product amazon-eks)
+Used fields: `eol` as standard-support end, `extendedSupport` as extended-support end.
+
+| Version | Status | Standard end | Extended end |
+|---|---|---|---|
+| 1.32 (current) | EXTENDED | 2026-03-23 | 2027-03-23 |
+| 1.37 (target) | STANDARD | 2027-12-01 | 2028-12-01 |
+
+Urgency: **CRITICAL** — standard support for 1.32 already ended on 2026-03-23 (today is 2026-11-16); the cluster is running in the paid extended-support window. Fees: UNKNOWN — no official AWS pricing page was fetched this run, so the extended-support hourly/monthly rate is not reported (never invented).
+
+## Coverage gaps
+- needs scan (read only): ServiceAccount IAM role annotations (IRSA/Pod Identity) for EKS platform prerequisite checks.
+
+## Top blockers
+1. policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy.yaml has no replacement API and needs a manual migration to Pod Security Admission (or an equivalent policy engine) before relying on it.
+2. IRSA/Pod Identity could not be verified from the scan (coverage gap) — confirm EKS platform prerequisites manually before the first hop.
+
+## What happens next
+A pull request on a new branch carries the 3 safe apiVersion fixes plus this plan and its HTML rendering under `preflight-reports/&lt;scan id prefix&gt;/`. It requires human review and merge; nothing here was applied to the live cluster.
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
