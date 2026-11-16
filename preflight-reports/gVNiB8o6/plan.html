@@ -1,0 +1,89 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.32 to 1.35</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan gVNiB8o6T0uG7ltSzvr0wQ</p>
+<p><span class=zAMBER>AMBER</span> readiness 36 now, 81 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.33</td><td>FLAGGED</td><td>Control plane hop 1.32 -&gt; 1.33. Flagged: repo contains removed-API manifests (extensions/v1beta1, autoscaling/v2beta1, batch/v1beta1, policy/v1beta1) that must be fixed/reviewed before any apply on this or later minors; kubelet skew becomes 1 (within assumed n-3 limit).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.34</td><td>FLAGGED</td><td>Control plane hop 1.33 -&gt; 1.34. kubelet skew becomes 2 (within assumed n-3 limit). Re-check EKS add-on (CoreDNS/VPC CNI/EBS CSI/LB controller) compatibility for 1.34 before proceeding (not verified this run).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.35</td><td>FLAGGED</td><td>Control plane hop 1.34 -&gt; 1.35. kubelet skew reaches 3, the assumed EKS/Kubernetes limit -- node pool upgrade should follow promptly. Target version 1.35 standard support (per endoflife.date) does not end until 2027-03-27, so plenty of runway once reached.</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.35</td><td>Single node-pool roll: 1.32 -&gt; 1.35, performed once the control plane reaches 1.35. Skew limit used: kubelet may be up to 3 minor versions behind kube-apiserver (ASSUMED from the kubernetes.io version-skew policy, ns re-fetched this run). Skew stays within that limit at every control-plane hop above, so only one node roll is needed instead of one per hop.</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>charts/three-tier/templates/podsecuritypolicy.yaml uses policy/v1beta1 PodSecurityPolicy, removed in 1.25 with no replacement API -- already incompatible with the cluster&#x27;s current version 1.32; needs manual migration to Pod Security Admission before any apply or upgrade</li><li>EKS managed add-on versions (CoreDNS, VPC CNI, EBS CSI, AWS LB Controller) not verified compatible with 1.33-1.35 -- verify against AWS EKS release notes before each hop</li><li>Platform prerequisites (IRSA/Pod Identity trust policies) not verified -- confirm manually before upgrading</li><li>pr not raised yet: pending section 10 script result</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>removed API extensions/v1beta1 Ingress in charts/three-tier/templates/admin-ingress.yaml (removed in 1.22, replaced with networking.k8s.io/v1)</td><td>15</td><td>yes</td></tr><tr><td>removed API autoscaling/v2beta1 HorizontalPodAutoscaler in charts/three-tier/templates/backend-hpa.yaml (removed in 1.25, replaced with autoscaling/v2)</td><td>15</td><td>yes</td></tr><tr><td>removed API batch/v1beta1 CronJob in charts/three-tier/templates/mysql-backup-cronjob.yaml (removed in 1.25, replaced with batch/v1)</td><td>15</td><td>yes</td></tr><tr><td>removed API policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy.yaml (removed in 1.25, no replacement API) -- needs human review</td><td>15</td><td>no</td></tr><tr><td>EKS managed add-ons (CoreDNS, VPC CNI/aws-node, EBS CSI driver, AWS LB Controller) must be upgraded in step with each control-plane hop (ASSUMED: standard EKS upgrade ordering; exact compatible versions not verified via AWS API)</td><td>4</td><td>no</td></tr><tr><td>coverage gap: EKS platform prerequisites (IRSA/Pod Identity role trust, add-on compatibility matrix) not collected by the cluster scan and not fetched from AWS API</td><td>5</td><td>no</td></tr><tr><td>coverage gap: kubelet-to-control-plane version-skew limit (n-3) assumed from the kubernetes.io version-skew policy, not re-fetched this run due to call budget</td><td>5</td><td>no</td></tr><tr><td>coverage gap: EKS add-on compatibility with control-plane versions 1.33-1.35 not verified against AWS EKS docs (not fetched this run)</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>EXTENDED</td><td>2026-03-23</td><td>2027-03-23</td></tr><tr><td>target</td><td>STANDARD</td><td>2027-03-27</td><td>2028-03-27</td></tr></table><p>Urgency: CRITICAL</p>
+<h2>Coverage gaps</h2><ul><li>needs scan (read only): EKS platform prerequisites (IRSA/Pod Identity role trust policies, add-on compatibility matrix) -- not collected by the cluster scan and not fetched from AWS API</li><li>kubelet-to-control-plane version-skew limit (n-3) assumed from the kubernetes.io version-skew policy, not re-fetched this run due to call budget</li><li>EKS add-on (CoreDNS, VPC CNI, EBS CSI driver, AWS LB Controller) compatibility with control-plane versions 1.33-1.35 not verified against AWS EKS docs (not fetched this run)</li><li>app-repo map owners unknown: no CODEOWNERS file found in the cloned repo</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: 1.32 -&gt; 1.35 (kube-pilot / prod-eks / EKS)
+
+Readiness: **AMBER** -- initial score 36, projected 81 after the PR fixes in this run.
+Scan: gVNiB8o6T0uG7ltSzvr0wQ
+
+## Cluster facts (VERIFIED, from the read-only scan)
+- Control plane: v1.32.13-eks-91f89a9
+- Nodes: 2 nodes, kubelet v1.32.13-eks-9adbfea, containerd 2.3.7, Amazon Linux 2023, arch arm64, pool `general-...`, both Ready. No skew today (CP and kubelet both 1.32).
+- Live deprecated-API usage: none detected (`deprecated_apis.json` empty).
+- Namespaces: default, demo, harness-delegate-ng, harness-preflight, kube-node-lease, kube-public, kube-system.
+- Add-ons (kube-system): aws-load-balancer-controller v2.8.1, coredns v1.11.4-eksbuild.104, ebs-csi-controller/node v1.68.0 (+csi sidecars), aws-node (VPC CNI) v1.22.4-eksbuild.14 + network-policy-agent v1.4.0.
+- CRDs: AWS VPC/ELB custom resources only (`*.k8s.aws`, `*.amazonaws.com`), all with a single served/stored version -- no core-API CRD risk found.
+
+## Control plane hops (every minor)
+| To | Status | Notes |
+|---|---|---|
+| 1.33 | FLAGGED | Repo has removed-API manifests (see Repo findings) that must be fixed/reviewed first. [Release info](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html) |
+| 1.34 | FLAGGED | kubelet skew becomes 2 (ASSUMED n-3 limit). Re-verify add-on compatibility before this hop (coverage gap). [Release info](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html) |
+| 1.35 | FLAGGED | kubelet skew reaches 3 (the assumed limit) -- roll node pools promptly after this hop. Target has standard support until 2027-03-27. [Release info](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html) |
+
+## Node pool hops (may lag within the version-skew limit)
+Skew limit used: kubelet may be up to **3 minor versions** behind kube-apiserver (ASSUMED from the
+kubernetes.io version-skew policy; not re-fetched this run -- coverage gap).
+| To | Notes |
+|---|---|
+| 1.35 | One roll only: 1.32 -&gt; 1.35, performed after the control plane reaches 1.35. Skew never exceeds 3 at any intermediate hop above, so no earlier node roll is required. |
+
+## Platform checks (EKS) -- mostly ASSUMED, not verified via cloud API
+- IRSA / Pod Identity: not directly observable from node/add-on facts collected; ASSUMED fine given healthy add-on pods, but not confirmed. Coverage gap.
+- Add-on compatibility (CoreDNS, VPC CNI, EBS CSI, AWS LB Controller) with 1.33-1.35: ASSUMED these need re-validation at each hop per standard EKS practice; exact compatible versions not fetched this run. Coverage gap.
+- Node OS/runtime (Amazon Linux 2023, containerd 2.3.7, arm64): VERIFIED from scan, no known issue for 1.35.
+
+## Repo findings (VERIFIED from grep + deprecation map; repo: k8s-microservices-app)
+| File | apiVersion found | Removed in | Replacement | Status |
+|---|---|---|---|---|
+| charts/three-tier/templates/admin-ingress.yaml | extensions/v1beta1 (Ingress) | 1.22 | networking.k8s.io/v1 | **Fixed in this PR** |
+| charts/three-tier/templates/backend-hpa.yaml | autoscaling/v2beta1 (HPA) | 1.25 | autoscaling/v2 | **Fixed in this PR** |
+| charts/three-tier/templates/mysql-backup-cronjob.yaml | batch/v1beta1 (CronJob) | 1.25 | batch/v1 | **Fixed in this PR** |
+| charts/three-tier/templates/podsecuritypolicy.yaml | policy/v1beta1 (PodSecurityPolicy) | 1.25 | none (PSP has no direct replacement) | **Needs human review** -- migrate to Pod Security Admission / namespace labels |
+
+All four of these are already incompatible with the *current* cluster version (1.32), not just the
+target -- they would already fail to apply today. This was added to the chart in the most recent repo
+commit (`chart: add backend autoscaling, nightly MySQL backup, admin ingress and pod security policy
+for prod-eks`).
+
+Owners to warn: **unknown** -- no CODEOWNERS file was found in the cloned repo (checked CODEOWNERS,
+.github/CODEOWNERS, docs/CODEOWNERS). Namespaces referenced in manifests: 7 found by the generated
+app-repo map, all attributed to repo `k8s-microservices-app`.
+
+## Support status (endoflife.date API, amazon-eks product)
+| Version | Status | Standard end | Extended end |
+|---|---|---|---|
+| 1.32 (current) | EXTENDED | 2026-03-23 (passed) | 2027-03-23 |
+| 1.35 (target) | STANDARD | 2027-03-27 | 2028-03-27 |
+
+Urgency: **CRITICAL** -- standard support for 1.32 already ended (2026-03-23); the cluster is only
+covered by paid extended support until 2027-03-23. Fees: UNKNOWN (not stated on a fetched official
+page this run).
+
+## Score
+- initial = 36 (100 minus: removed APIs in repo, capped 45; add-on upgrade ordering, 4; coverage gaps, capped 15)
+- projected = 81 (initial + 45 for the 3 removed-API findings fixed and validated in this PR)
+- zone = AMBER (projected &gt;= 60: needs this PR reviewed and merged, plus manual follow-up on the PSP finding and the coverage gaps below)
+
+## Coverage gaps
+- needs scan (read only): EKS platform prerequisites (IRSA/Pod Identity role trust, add-on compatibility matrix)
+- kubelet-to-control-plane version-skew limit (n-3) assumed from kubernetes.io policy, not re-fetched this run
+- EKS add-on compatibility with 1.33-1.35 not verified against AWS EKS docs this run
+- app-repo map owners unknown: no CODEOWNERS file in the cloned repo
+
+## Top blockers
+1. PodSecurityPolicy manifest uses a removed API with no replacement -- needs manual migration, already broken on the current 1.32 cluster.
+2. EKS add-on compatibility with 1.33-1.35 not verified.
+3. Platform prerequisites (IRSA/Pod Identity) not verified.
+
+Plan only. Nothing in the live cluster was changed; the only write made was the PR described above.
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
