@@ -1,6 +1,6 @@
 {{- if .Values.backend.autoscaling.enabled -}}
 {{- $a := .Values.backend.autoscaling }}
-apiVersion: autoscaling/v2beta1
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: backend
@@ -18,5 +18,7 @@ spec:
     - type: Resource
       resource:
         name: cpu
-        targetAverageUtilization: {{ $a.targetCPUUtilizationPercentage }}
+        target:
+          type: Utilization
+          averageUtilization: {{ $a.targetCPUUtilizationPercentage }}
 {{- end }}
