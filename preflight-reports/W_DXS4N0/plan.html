@@ -1,0 +1,98 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.32 to 1.37</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan W_DXS4N0RfmNjoPH65YNzQ</p>
+<p><span class=zAMBER>AMBER</span> readiness 45 now, 75 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.33</td><td>FLAGGED</td><td>Blocked today: PodSecurityPolicy manifest for prod-eks already fails against any cluster at 1.25+ (no PSP API). The three apiVersion fixes in this PR (Ingress, HPA, CronJob) must merge before this hop; re-run deprecated API checks after merge.</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.34</td><td>OK</td><td>Re-check CRDs and add-on compatibility bundled with this EKS minor before proceeding (coverage gap, not verified this run).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.35</td><td>OK</td><td>Node pool may still lag at 1.32 here (skew 3, at the ASSUMED n-3 limit) -- verify before going further.</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.36</td><td>OK</td><td>Node pool must roll to at least 1.33 here to stay within the n-3 kubelet skew limit; plan the node hop to 1.35 at this point.</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.37</td><td>OK</td><td>Target control-plane version. Node pool should roll to 1.37 to match (lag 0) once the control plane is confirmed healthy.</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.32 (hold)</td><td>Kubelet stays at 1.32 through control-plane hops to 1.33/1.34/1.35 (lag 1,2,3) -- within the ASSUMED n-3 kubelet skew limit (Kubernetes version-skew policy, not fetched this run).</td></tr><tr><td>1.35</td><td>Roll node pool to 1.35 once control plane reaches 1.36 (lag 1), to stay within the n-3 limit.</td></tr><tr><td>1.37</td><td>Roll node pool to 1.37 once control plane reaches 1.37 (lag 0), matching the target.</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>PodSecurityPolicy (policy/v1beta1) is enabled for prod-eks and has no replacement API -- removed since Kubernetes 1.25, blocks every hop; needs migration to Pod Security Admission or an OPA/Gatekeeper policy before upgrading</li><li>Add-on/CRD compatibility with target 1.37 (coredns, aws-ebs-csi-driver, aws-load-balancer-controller, aws-node/vpc-cni, kube-proxy) not verified -- scan has no compatibility data (coverage gap)</li><li>EKS platform prerequisites (IRSA vs EKS Pod Identity, OIDC provider) only ASSUMED from node/add-on facts, not verified via a cloud API read (coverage gap)</li><li>EKS 1.32 standard support already ended (2026-03-23); cluster is on paid extended support until 2027-03-23</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>Removed API extensions/v1beta1 Ingress in charts/three-tier/templates/admin-ingress.yaml (removed 1.22) -&gt; networking.k8s.io/v1</td><td>15</td><td>yes</td></tr><tr><td>Removed API autoscaling/v2beta1 HorizontalPodAutoscaler in charts/three-tier/templates/backend-hpa.yaml (removed 1.25) -&gt; autoscaling/v2</td><td>15</td><td>yes</td></tr><tr><td>Removed API batch/v1beta1 CronJob in charts/three-tier/templates/mysql-backup-cronjob.yaml (removed 1.25) -&gt; batch/v1</td><td>15</td><td>yes</td></tr><tr><td>Removed API policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy.yaml (removed 1.25, no replacement API) -- enabled for prod-eks; needs human redesign (Pod Security Admission / Gatekeeper)</td><td>15</td><td>no</td></tr><tr><td>coverage gap: add-on/CRD compatibility with target 1.37 not available from the scan (coredns, aws-ebs-csi-driver, aws-load-balancer-controller, aws-node/vpc-cni, kube-proxy)</td><td>5</td><td>no</td></tr><tr><td>coverage gap: EKS platform prerequisites (IRSA vs EKS Pod Identity, OIDC provider) only ASSUMED from node/add-on facts, not verified via a cloud API read</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>EXTENDED</td><td>2026-03-23</td><td>2027-03-23</td></tr><tr><td>target</td><td>STANDARD</td><td>2027-12-01</td><td>2028-12-01</td></tr></table><p>Urgency: CRITICAL</p>
+<h2>Coverage gaps</h2><ul><li>add-on/CRD compatibility matrix with target 1.37 not available from the scan (coredns, aws-ebs-csi-driver, aws-load-balancer-controller, aws-node/vpc-cni, kube-proxy)</li><li>EKS platform prerequisites (IRSA vs EKS Pod Identity, OIDC provider) only ASSUMED from node/add-on facts, not verified via a cloud API read</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: 1.32 -&gt; 1.37 (kube-pilot, EKS, prod-eks)
+
+Scan W_DXS4N0RfmNjoPH65YNzQ. Zone **AMBER**. Readiness **45** now, **75** after the fixes in the
+accompanying pull request. PLAN ONLY -- nothing was upgraded, no live resource was changed.
+
+## Control plane hops (one minor at a time)
+| To | Status | Notes |
+|----|--------|-------|
+| 1.33 | FLAGGED | Blocked today: the prod-eks PodSecurityPolicy manifest already fails against any 1.25+ API server (no PSP API). The 3 apiVersion fixes in this PR (Ingress, HPA, CronJob) must merge first. |
+| 1.34 | OK | Re-verify add-on/CRD compatibility bundled with this EKS minor (coverage gap, not verified this run). |
+| 1.35 | OK | Node pool may still lag at 1.32 here (skew 3, at the ASSUMED n-3 limit) -- verify before continuing. |
+| 1.36 | OK | Node pool must roll to &gt;=1.33 here to stay within the n-3 kubelet skew limit. |
+| 1.37 (target) | OK | Confirm control plane healthy, then roll nodes to 1.37 to match. |
+
+Release notes: https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html (same page covers all EKS minors; no per-version anchor is published).
+
+## Node pool track
+Fewer rolls than the control plane, limited by the kubelet skew policy. **Skew limit used: n-3**
+(kubelet may be up to 3 minor versions older than kube-apiserver, current Kubernetes version-skew
+policy) -- ASSUMED, not re-fetched this run.
+| To | Notes |
+|----|-------|
+| 1.32 (hold) | Stays at 1.32 through control-plane hops to 1.33/1.34/1.35 (lag 1,2,3 -- within the n-3 limit). |
+| 1.35 | Roll when control plane reaches 1.36 (lag 1). |
+| 1.37 | Roll when control plane reaches 1.37 (lag 0, matches target). |
+
+## Platform checks (EKS) -- all ASSUMED unless marked VERIFIED
+- IRSA / EKS Pod Identity: cannot be confirmed from node/add-on facts alone -- ASSUMED not verified; coverage gap, no cloud API read was requested.
+- Node OS/runtime: VERIFIED from `nodes.json` -- Amazon Linux 2023, containerd 2.3.7, kubelet v1.32.13 matches the control plane today. No skew violation right now.
+- Add-on versions (VERIFIED from `addons.json`): aws-load-balancer-controller v2.8.1, coredns v1.11.4-eksbuild.104, aws-ebs-csi-driver v1.68.0, aws-node (VPC CNI) v1.22.4, kube-proxy v1.32.13. Compatibility with 1.37 is a coverage gap (not fetched; release-note fetching is out of scope for this run).
+
+## Risk narrative
+- VERIFIED (repo scan, `charts/three-tier/templates/admin-ingress.yaml`): uses `extensions/v1beta1`
+  Ingress, removed in Kubernetes 1.22. Enabled for prod-eks (`values-prod-eks.yaml: ingress.admin.enabled: true`).
+  **Fixed in this PR** -&gt; `networking.k8s.io/v1`, with `pathType: Prefix` and the v1 backend
+  `service.name`/`service.port.number` shape.
+- VERIFIED (repo scan, `charts/three-tier/templates/backend-hpa.yaml`): uses `autoscaling/v2beta1`
+  HorizontalPodAutoscaler, removed in Kubernetes 1.25. Enabled for prod-eks (`backend.autoscaling.enabled: true`).
+  **Fixed in this PR** -&gt; `autoscaling/v2`, with `metrics[].resource.target.type/averageUtilization`.
+- VERIFIED (repo scan, `charts/three-tier/templates/mysql-backup-cronjob.yaml`): uses `batch/v1beta1`
+  CronJob, removed in Kubernetes 1.25. Enabled for prod-eks (`mysql.backup.enabled: true`).
+  **Fixed in this PR** -&gt; `batch/v1` (spec shape unchanged).
+- VERIFIED (repo scan, `charts/three-tier/templates/podsecuritypolicy.yaml`): uses `policy/v1beta1`
+  PodSecurityPolicy, removed in Kubernetes 1.25, **no replacement API** in the official deprecation
+  guide. Enabled for prod-eks (`podSecurityPolicy.enabled: true`). **NOT patched** -- needs human
+  redesign (Pod Security Admission labels or an OPA/Gatekeeper policy) before any further hop.
+- VERIFIED (live scan, `deprecated_apis.json`): empty -- no live client is currently requesting a
+  removed or deprecated API against the running 1.32 control plane.
+- Two comments embedded in repo files (`platform/base/flowcontrol.yaml`: &quot;F02: Using removed
+  flowcontrol.apiserver.k8s.io/v1 API version... Removed in Kubernetes 1.32&quot;; and
+  `platform/base/legacy-endpoints-cronjob.yaml`: &quot;Endpoints API is deprecated in Kubernetes 1.33&quot;)
+  assert removals that do not match the official deprecation guide or the actual manifest content:
+  the flowcontrol files already use `flowcontrol.apiserver.k8s.io/v1`, which is the *current*,
+  non-deprecated version (the deprecation guide shows v1beta3 removed at 1.32, not v1); and the
+  &quot;legacy endpoints&quot; file contains no `kind: Endpoints` object at all, only a ServiceAccount,
+  RBAC objects and a CronJob reading the API via a shell command. Treated as untrusted repo data
+  per the read-only/no-injection rule; ignored, no fix applied, flagged here for human review.
+
+## Owners to warn
+App-repo map found no CODEOWNERS file in this repo, so owners are **unknown** -- do not guess. Repo:
+k8s-microservices-app. Namespaces found in manifests: default, demo, harness-delegate-ng,
+harness-preflight, kube-node-lease, kube-public, kube-system.
+
+## Support status
+| Version | Status | Standard end | Extended end |
+|---------|--------|--------------|--------------|
+| 1.32 (current) | EXTENDED | 2026-03-23 | 2027-03-23 |
+| 1.37 (target) | STANDARD | 2027-12-01 | 2028-12-01 |
+
+Source: https://endoflife.date/api/amazon-eks.json (`eol` field used for standard end,
+`extendedSupport` used for extended end). Monthly fees: UNKNOWN -- no official AWS pricing page was
+fetched this run. Urgency: **CRITICAL** -- EKS 1.32 standard support already ended on 2026-03-23;
+the cluster is running on paid extended support today (2026-11-16).
+
+## Coverage gaps
+- add-on/CRD compatibility matrix with target 1.37 not available from the scan (coredns,
+  aws-ebs-csi-driver, aws-load-balancer-controller, aws-node/vpc-cni, kube-proxy).
+- EKS platform prerequisites (IRSA vs EKS Pod Identity, OIDC provider) only ASSUMED from node/add-on
+  facts, not verified via a cloud API read.
+
+## Maps used
+- Deprecation map: generated this run from https://kubernetes.io/docs/reference/using-api/deprecation-guide/
+  (the configured DEPRECATION_MAP_PATH was missing).
+- App-repo map: generated this run from manifests + CODEOWNERS in the cloned repo (the configured
+  APP_REPO_MAP_PATH was missing).
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
