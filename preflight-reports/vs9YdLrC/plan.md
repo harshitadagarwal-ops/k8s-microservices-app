@@ -1,0 +1,83 @@
+# Kubernetes upgrade plan: 1.32 to 1.33
+
+Cluster `kube-pilot` | EKS | prod-eks | scan `vs9YdLrCR86CCZ6U_eaaEw`
+
+Readiness: **AMBER** — score 60 now, 90 after the fixes in the accompanying pull request (PR review
+and merge required; this plan is for review only, nothing was upgraded).
+
+## Control plane hops (one minor at a time)
+| To | Status | Notes | Release notes |
+|---|---|---|---|
+| 1.33 | FLAGGED | Single hop (1.32 -> 1.33). Flagged: `charts/three-tier/Chart.yaml` kubeVersion upper bound (`<1.33.0-0`) excludes the target and must be raised; the two deprecated-API fixes in the PR must merge first. | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html |
+
+## Node pool hops
+| To | Notes |
+|---|---|
+| 1.33 | Node pool `general-...` is at kubelet v1.32.13-eks (matches control plane). Skew limit used: Kubernetes upstream version-skew policy allows kubelet to lag kube-apiserver by up to 3 minor versions (n-3, in effect since Kubernetes 1.28); AWS EKS managed node groups follow the same policy (ASSUMED, not fetched live). Only one hop is needed; recommend rolling nodes to 1.33 in the same window as the control plane rather than relying on the full skew allowance. |
+
+## Platform checks (EKS) — derived from scan facts, rest ASSUMED
+- Node OS: Amazon Linux 2023, arch arm64, containerd runtime — VERIFIED from `nodes.json`, no action flagged.
+- IRSA / Pod Identity, cgroup v2 configuration: not observable from the collected facts (no IAM API
+  access) — ASSUMED compatible, not verified.
+- Add-on images in `kube-system` (aws-load-balancer-controller v2.8.1, coredns v1.11.4-eksbuild,
+  aws-ebs-csi-driver v1.68.0, amazon-k8s-cni v1.22.4-eksbuild) — VERIFIED present from `addons.json`;
+  compatibility with 1.33 was not fetched (release notes are out of scope for interpretation), so
+  treat as ASSUMED and confirm against the AWS EKS release notes link above before the hop.
+- CRDs (`crds.json`): all are AWS VPC-CNI / Load Balancer Controller CRDs at `v1alpha1`/`v1beta1`
+  stored versions — VERIFIED no CRD has more than one stored version, so no conversion webhook risk
+  was found.
+
+## Risk narrative
+- **VERIFIED (live scan)**: `deprecated_apis.json` is empty — no client is currently requesting a
+  removed/deprecated API against the live control plane.
+- **VERIFIED (repo scan)**: two Helm chart templates in `charts/three-tier` used removed
+  `apiVersion`s that would break once served APIs are removed at/after 1.33:
+  - `templates/backend-pdb.yaml`: `policy/v1beta1` PodDisruptionBudget (removed in Kubernetes 1.25) — **fixed in the PR**, replaced with `policy/v1`.
+  - `templates/frontend-hpa.yaml`: `autoscaling/v2beta2` HorizontalPodAutoscaler (removed in Kubernetes 1.26) — **fixed in the PR**, replaced with `autoscaling/v2`.
+- **VERIFIED (repo scan)**: `charts/three-tier/Chart.yaml` declares
+  `kubeVersion: ">=1.28.0-0 <1.33.0-0"`, which excludes Kubernetes 1.33 outright. There is no
+  deprecation-map replacement for a version-constraint field, so this was **not** auto-patched —
+  it needs a human to raise the upper bound once the chart has been validated against 1.33.
+- **Flagged inaccuracies, verified against the deprecation map and the live scan, not scored**:
+  two code comments in the repo (tagged `F02` in `platform/base/flowcontrol.yaml` and `F07` in
+  `platform/base/legacy-endpoints-cronjob.yaml`) claim removed/deprecated API usage
+  (`flowcontrol.apiserver.k8s.io/v1` "removed in 1.32", and core `v1` Endpoints "deprecated in
+  1.33"). Neither claim is supported: the official deprecation guide shows `flowcontrol...k8s.io/v1`
+  is the *current* replacement version (only `v1beta1`/`v1beta2`/`v1beta3` were removed), and the
+  live `deprecated_apis.json` scan recorded no deprecated-API requests. Both files already use
+  current, non-deprecated apiVersions (`flowcontrol.apiserver.k8s.io/v1`, `batch/v1`), so nothing
+  was changed; flagging for comment cleanup only.
+
+## Owners to warn (app-repo map)
+The app-repo map was generated from manifests and CODEOWNERS (no configured map was supplied). The
+repo `k8s-microservices-app` has **no CODEOWNERS file**, so owners are reported as **unknown** — do
+not guess:
+- Namespaces found in manifests: `argocd`, `demo`, `default`, `cert-manager`, `ingress-nginx`,
+  `reporting`, `harness-preflight` (owners: unknown for all).
+
+## Support status
+| Version | Status | Standard end | Extended end |
+|---|---|---|---|
+| 1.32 (current) | EXTENDED | 2026-03-23 | 2027-03-23 |
+| 1.33 (target) | EXTENDED | 2026-07-29 | 2027-07-29 |
+
+Source: endoflife.date `amazon-eks` API (`eol` field used as standard_end, `extendedSupport` used as
+extended_end). Fees: not stated by the fetched API, reported as UNKNOWN rather than invented.
+**Urgency: CRITICAL** — standard support for the current version (1.32) already ended on 2026-03-23
+(today is 2026-11-16); the cluster is currently running on paid extended support, and the 1.33 target
+itself already passed its own standard-support end date (2026-07-29), so this hop does not restore
+standard support — plan the next hop immediately after this one.
+
+## Coverage gaps
+None — all cluster fact files (`cluster_version`, `nodes`, `deprecated_apis`, `addons`, `crds`,
+`namespaces`) returned `status: ok`; both maps were missing as configured files but were generated
+successfully from official/repo sources per the runbook, which is not treated as a gap.
+
+## Score deductions
+| Finding | Points | Fixed |
+|---|---|---|
+| Removed API: `policy/v1beta1` PodDisruptionBudget in `backend-pdb.yaml` | 15 | yes |
+| Removed API: `autoscaling/v2beta2` HPA in `frontend-hpa.yaml` | 15 | yes |
+| Chart `kubeVersion` excludes 1.33 (`charts/three-tier/Chart.yaml`) | 10 | no (needs human review) |
+
+Plan only: nothing was upgraded and no live resource was changed.
