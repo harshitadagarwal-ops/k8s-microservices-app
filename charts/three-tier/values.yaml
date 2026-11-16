@@ -12,12 +12,20 @@ frontend:
   service:
     type: ClusterIP
     nodePort: null
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
 
 backend:
   image: backend
   tag: "1.0.0"
   replicas: 2
   port: 5000
+  pdb:
+    enabled: false
+    minAvailable: 1
 
 mysql:
   image: mysql:8.0
