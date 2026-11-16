@@ -1,0 +1,90 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.32 to 1.34</h1>
+<p class=mute>Cluster kubepilot | EKS | prod-eks | scan RSJAU2S5QUe5z5CXwyD7cQ</p>
+<p><span class=zAMBER>AMBER</span> readiness 52 now, 82 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.33</td><td>OK</td><td>No removed-API findings target this hop specifically; re-run Preflight after this hop to confirm no new deprecation warnings before continuing.</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.34</td><td>FLAGGED</td><td>Target version. PodSecurityPolicy template (unfixed) must be resolved by a human before/at this hop if podSecurityPolicy.enabled is used on any environment.</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.34</td><td>Node pool &#x27;general-...&#x27; is at kubelet v1.32.13, in sync with the control plane. Skew limit used: Kubernetes version skew policy allows kubelet up to 3 minor versions behind kube-apiserver (n-3, per https://kubernetes.io/releases/version-skew-policy/), so the node pool can roll directly from 1.32 to 1.34 in a single hop once the control plane reaches 1.34; it does not need to track every control-plane minor.</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>policy/v1beta1 PodSecurityPolicy (charts/three-tier/templates/podsecuritypolicy.yaml) has no replacement API; migrate to Pod Security Admission or an OPA/Gatekeeper/Kyverno policy before relying on podSecurityPolicy.enabled=true</li><li>legacy-endpoints-cronjob.yaml polls the deprecated core/v1 Endpoints API every 5 minutes; migrate the client to discovery.k8s.io/v1 EndpointSlices ahead of 1.34</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>extensions/v1beta1 Ingress removed in 1.22 (charts/three-tier/templates/admin-ingress.yaml)</td><td>15</td><td>yes</td></tr><tr><td>autoscaling/v2beta1 HorizontalPodAutoscaler removed in 1.26 (charts/three-tier/templates/backend-hpa.yaml)</td><td>15</td><td>yes</td></tr><tr><td>batch/v1beta1 CronJob removed in 1.25 (charts/three-tier/templates/mysql-backup-cronjob.yaml)</td><td>15</td><td>yes</td></tr><tr><td>policy/v1beta1 PodSecurityPolicy removed in 1.25, no replacement API (charts/three-tier/templates/podsecuritypolicy.yaml)</td><td>15</td><td>no</td></tr><tr><td>Deprecated core/v1 Endpoints API polled by legacy client ahead of EndpointSlice migration (platform/base/legacy-endpoints-cronjob.yaml)</td><td>3</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>EXTENDED</td><td>2026-03-23</td><td>2027-03-23</td></tr><tr><td>target</td><td>STANDARD</td><td>2026-12-02</td><td>2027-12-02</td></tr></table><p>Urgency: CRITICAL</p>
+<h2>Coverage gaps</h2><ul><li class=mute>None</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: 1.32 -&gt; 1.34 (kubepilot, EKS, prod-eks)
+
+Scan RSJAU2S5QUe5z5CXwyD7cQ. Readiness score: **52 now -&gt; 82 projected** after the fixes in the pull
+request. Zone: **AMBER** (needs PR review and merge).
+
+## Control plane hops (every minor)
+1. **1.32 -&gt; 1.33** — OK. [EKS version docs](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html).
+   No removed-API finding targets this hop specifically. Re-run Preflight after this hop.
+2. **1.33 -&gt; 1.34** — FLAGGED (target). [EKS version docs](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html).
+   The unfixed `PodSecurityPolicy` template must be resolved by a human before/at this hop if any
+   environment sets `podSecurityPolicy.enabled: true` (prod-eks does, see `values-prod-eks.yaml`).
+
+## Node pool track
+Node pool `general-20261115161132087800000008` is at kubelet v1.32.13, in sync with the control
+plane (VERIFIED from `nodes.json`). Skew limit used: the Kubernetes version-skew policy allows the
+kubelet to run up to 3 minor versions behind kube-apiserver (n-3,
+https://kubernetes.io/releases/version-skew-policy/). So the node pool does not need to track every
+control-plane minor and can roll directly **1.32 -&gt; 1.34** in one hop once the control plane reaches
+1.34.
+
+## Platform checks (EKS) — ASSUMED unless noted
+- IRSA: `serviceAccount.annotations[&quot;eks.amazonaws.com/role-arn&quot;]` is set in `values-prod-eks.yaml`
+  (VERIFIED from repo) — classic IRSA, still supported at 1.34. Pod Identity adoption not assessed
+  (no cloud API access).
+- Node OS: Amazon Linux 2023, containerd runtime (VERIFIED from `nodes.json`) — compatible track for
+  1.34.
+- Add-on images (aws-load-balancer-controller v2.8.1, VPC CNI v1.22.4, EBS CSI v1.68.0, CoreDNS
+  v1.11.4, kube-proxy matching control plane) were read from `addons.json` but their minimum-required
+  versions for 1.34 were NOT verified (release notes fetch is out of scope) — ASSUMED compatible
+  pending a human check against the AWS EKS add-on compatibility table.
+
+## Risk narrative and findings
+- **extensions/v1beta1 Ingress** removed in 1.22, found in `charts/three-tier/templates/admin-ingress.yaml`
+  (VERIFIED, repo scan). **Fixed and validated** in the pull request: apiVersion -&gt;
+  `networking.k8s.io/v1`, backend restructured to `service.name`/`service.port.number`, `pathType: Prefix` added.
+- **autoscaling/v2beta1 HorizontalPodAutoscaler** removed in 1.26, found in
+  `charts/three-tier/templates/backend-hpa.yaml` (VERIFIED). **Fixed and validated**: apiVersion -&gt;
+  `autoscaling/v2`, metric restructured to `target.type: Utilization` / `target.averageUtilization`
+  (matches the existing pattern already used in `frontend-hpa.yaml`).
+- **batch/v1beta1 CronJob** removed in 1.25, found in `charts/three-tier/templates/mysql-backup-cronjob.yaml`
+  (VERIFIED). **Fixed and validated**: apiVersion -&gt; `batch/v1` (spec shape unchanged between the two versions).
+- **policy/v1beta1 PodSecurityPolicy** removed in 1.25 with **no replacement API**
+  (VERIFIED from the Kubernetes deprecation guide), found in
+  `charts/three-tier/templates/podsecuritypolicy.yaml`, enabled for prod-eks. **Not patched** —
+  needs human migration to Pod Security Admission or an OPA/Gatekeeper/Kyverno policy.
+- **Deprecated core/v1 Endpoints API** polled every 5 minutes by
+  `platform/base/legacy-endpoints-cronjob.yaml` (VERIFIED from repo; the file&#x27;s own comment notes
+  this is deprecated ahead of `discovery.k8s.io/v1` EndpointSlices — ASSUMED accurate, not independently
+  confirmed against the live `deprecated_apis.json` scan, which returned no entries). Not patched:
+  this requires a client code change, not an apiVersion swap.
+- Live cluster scan (`deprecated_apis.json`) found **no** API server requests for removed/deprecated
+  APIs at the time of the scan (VERIFIED, status ok, empty result) — all removed-API findings above
+  come from the repo scan of manifests that may not currently be deployed to every environment.
+- CRDs (`crds.json`) show no stored-but-unserved version mismatches (VERIFIED) — no CRD migration
+  blocker found.
+
+## Owners to warn
+No `CODEOWNERS` file was found in the cloned repo (checked `CODEOWNERS`, `.github/CODEOWNERS`,
+`docs/CODEOWNERS`) — owners are **unknown** for the affected namespaces (`default`, and the
+namespaces implied by the Helm chart). Do not guess; route the pull request to whoever owns
+`charts/three-tier` and `platform/base` manually.
+
+## Support status
+- Current (1.32): status **EXTENDED** — standard support ended 2026-03-23, extended support ends
+  2027-03-23 (endoflife.date API, `eol`/`extendedSupport` fields). Standard support has already
+  lapsed.
+- Target (1.34): status **STANDARD** — standard support ends 2026-12-02, extended support ends
+  2027-12-02 (same source/fields). The standard window closes in under a month from today
+  (2026-11-16).
+- Fees: UNKNOWN (no official AWS pricing page was fetched; do not infer a monthly figure).
+- Urgency: **CRITICAL** — the running version&#x27;s standard support window has already ended.
+
+## Coverage gaps
+None. All six cluster fact files (`cluster_version`, `nodes`, `deprecated_apis`, `addons`, `crds`,
+`namespaces`) read with status `ok`. Both maps (deprecation, app-repo) were generated successfully
+since the configured paths (`preflight-config/deprecation-map.json`,
+`preflight-config/app-repo-map.json`) did not exist.
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
