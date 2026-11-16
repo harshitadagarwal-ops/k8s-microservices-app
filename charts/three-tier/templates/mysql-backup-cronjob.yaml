@@ -1,6 +1,6 @@
 {{- if .Values.mysql.backup.enabled -}}
 {{- $b := .Values.mysql.backup }}
-apiVersion: batch/v1beta1
+apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: mysql-backup
