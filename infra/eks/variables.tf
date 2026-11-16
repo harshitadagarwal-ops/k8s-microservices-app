@@ -52,6 +52,14 @@ variable "node_desired_size" {
   default = 2
 }
 
+variable "delegate_instance_types" {
+  type = list(string)
+  # On-Demand Graviton for the Harness delegate node. t4g.medium = 2 vCPU / 4 GiB,
+  # enough for the delegate (requests cpu:1, mem:2Gi) plus the node DaemonSets.
+  default     = ["t4g.medium"]
+  description = "Instance types for the On-Demand node group that hosts only the Harness delegate."
+}
+
 variable "enable_lb_controller" {
   type        = bool
   default     = true

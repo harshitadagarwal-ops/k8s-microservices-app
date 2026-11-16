@@ -34,3 +34,13 @@ resources:
   requests:
     cpu: "0.5"
     memory: "2048Mi"
+
+# Run only on the dedicated On-Demand node group "delegate" (infra/eks/eks.tf),
+# so Spot reclaims of the "general" node group can't take the delegate down.
+nodeSelector:
+  workload: harness-delegate
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: harness-delegate
+    effect: NoSchedule

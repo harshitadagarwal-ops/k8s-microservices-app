@@ -1,6 +1,6 @@
 region          = "us-east-1"
 cluster_name    = "kube-pilot"
-cluster_version = "1.32"
+cluster_version = "1.34"
 vpc_cidr        = "10.0.0.0/16"
 
 # Graviton (ARM) + Spot node group. >=2 vCPU types only (delegate needs 1 CPU).
@@ -13,6 +13,9 @@ node_instance_types = [
 node_min_size     = 2
 node_max_size     = 3
 node_desired_size = 2
+
+# On-Demand node reserved for the Harness delegate (not affected by Spot reclaims).
+delegate_instance_types = ["t4g.medium"]
 
 # AWS Load Balancer Controller (ALB/NLB for Ingress). Set false to skip.
 enable_lb_controller        = true

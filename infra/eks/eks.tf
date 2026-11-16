@@ -58,6 +58,31 @@ module "eks" {
       max_size     = var.node_max_size
       desired_size = var.node_desired_size
     }
+
+    # Small On-Demand Graviton node reserved for the Harness delegate, so Spot
+    # reclaims of the "general" group can't take the delegate down. The taint
+    # keeps app pods off it; the delegate gets a matching toleration and a
+    # nodeSelector (see infra/delegate/values.yaml).
+    delegate = {
+      ami_type       = "AL2023_ARM_64_STANDARD"
+      capacity_type  = "ON_DEMAND"
+      instance_types = var.delegate_instance_types
+
+      min_size     = 1
+      max_size     = 1
+      desired_size = 1
+
+      labels = {
+        workload = "harness-delegate"
+      }
+      taints = {
+        delegate = {
+          key    = "dedicated"
+          value  = "harness-delegate"
+          effect = "NO_SCHEDULE"
+        }
+      }
+    }
   }
 
   tags = var.tags
