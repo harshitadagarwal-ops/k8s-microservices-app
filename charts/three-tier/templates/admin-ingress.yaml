@@ -1,6 +1,6 @@
 {{- $a := .Values.ingress.admin }}
 {{- if $a.enabled }}
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: backend-admin
@@ -14,7 +14,10 @@ spec:
       http:
         paths:
           - path: /
+            pathType: Prefix
             backend:
-              serviceName: backend
-              servicePort: {{ .Values.backend.port }}
+              service:
+                name: backend
+                port:
+                  number: {{ .Values.backend.port }}
 {{- end }}
