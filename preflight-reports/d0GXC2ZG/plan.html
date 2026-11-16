@@ -1,0 +1,105 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.32 to 1.37</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan d0GXC2ZGSUCDDmrctAcZcw</p>
+<p><span class=zAMBER>AMBER</span> readiness 42 now, 72 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.33</td><td>FLAGGED</td><td>Pre-existing blocker, not a new one at this hop: charts/three-tier templates use extensions/v1beta1 Ingress (removed 1.22), autoscaling/v2beta1 HPA and batch/v1beta1 CronJob (both removed 1.25), and policy/v1beta1 PodSecurityPolicy (removed 1.25, no replacement). All four are enabled for prod-eks and already cannot be applied to the current 1.32 cluster. 3 of 4 fixed in the accompanying PR; PodSecurityPolicy needs a human redesign (Pod Security admission or an external policy engine) before this hop.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.33.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.33.md</a></td></tr><tr><td>1.34</td><td>OK</td><td>No new repo or live removed-API findings identified for this hop.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.34.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.34.md</a></td></tr><tr><td>1.35</td><td>OK</td><td>Node pool skew reaches the 3-minor-version limit here if nodes are still on 1.32; plan the first node pool roll before this hop completes.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md</a></td></tr><tr><td>1.36</td><td>OK</td><td>Node pool must be at 1.33 or newer by this hop to stay within the skew limit.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md</a></td></tr><tr><td>1.37</td><td>OK</td><td>Target version. Node pool must be at 1.34 or newer by this hop. 1.32 standard EKS support already ended (2026-03-23); the cluster has been running on paid extended support since then, which is the main driver for finishing this upgrade.</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.32 (no roll)</td><td>Skew limit used: Kubernetes version skew policy, kubelet up to 3 minor versions older than kube-apiserver (n-3). Nodes stay on 1.32 through control-plane hops to 1.33, 1.34 and 1.35 (diff reaches 3, still within limit).</td></tr><tr><td>1.33</td><td>Roll node pool to 1.33 before/at the control-plane 1.36 hop; staying at 1.32 would put the skew at 4, over the n-3 limit.</td></tr><tr><td>1.34</td><td>Roll node pool to 1.34 before/at the control-plane 1.37 hop; staying at 1.33 would put the skew at 4, over the n-3 limit. Final state: control plane 1.37, nodes 1.34, skew 3 (at the limit, within policy).</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy.yaml has no replacement apiVersion and needs a human redesign (Pod Security admission or an external policy engine) before any hop</li><li>core/v1 Endpoints polled every 5 minutes by platform/base/legacy-endpoints-cronjob.yaml; migrate the client to discovery.k8s.io/v1 EndpointSlice</li><li>1.32 standard EKS support already ended on 2026-03-23; the cluster is on paid extended support now</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>Ingress apiVersion extensions/v1beta1 in charts/three-tier/templates/admin-ingress.yaml (removed in 1.22, enabled for prod-eks)</td><td>15</td><td>yes</td></tr><tr><td>HorizontalPodAutoscaler apiVersion autoscaling/v2beta1 in charts/three-tier/templates/backend-hpa.yaml (removed in 1.25, enabled for prod-eks)</td><td>15</td><td>yes</td></tr><tr><td>CronJob apiVersion batch/v1beta1 in charts/three-tier/templates/mysql-backup-cronjob.yaml (removed in 1.25, enabled for prod-eks)</td><td>15</td><td>yes</td></tr><tr><td>PodSecurityPolicy apiVersion policy/v1beta1 in charts/three-tier/templates/podsecuritypolicy.yaml (removed in 1.25, no replacement apiVersion, enabled for prod-eks)</td><td>15</td><td>no</td></tr><tr><td>core/v1 Endpoints polled every 5 minutes by platform/base/legacy-endpoints-cronjob.yaml (deprecated in favor of discovery.k8s.io/v1 EndpointSlice)</td><td>3</td><td>no</td></tr><tr><td>needs scan (read only): live admission behavior of the four prod-eks Helm templates above is unconfirmed by the cluster scan (addons.json/deprecated_apis.json show no corresponding live objects), so these findings are repo-sourced only</td><td>5</td><td>no</td></tr><tr><td>needs scan (read only): deprecated_apis.json returned no hits, but the repo shows a workload (legacy-endpoints-report CronJob) that calls the deprecated core/v1 Endpoints API on a 5-minute schedule; the scan window may not have captured it</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>EXTENDED</td><td>2026-03-23</td><td>2027-03-23</td></tr><tr><td>target</td><td>STANDARD</td><td>2027-12-01</td><td>2028-12-01</td></tr></table><p>Urgency: CRITICAL</p>
+<h2>Coverage gaps</h2><ul><li>needs scan (read only): live admission behavior of the four prod-eks Helm templates (admin ingress, backend HPA, mysql backup CronJob, PodSecurityPolicy) is unconfirmed by the cluster scan; addons.json and deprecated_apis.json show no corresponding live objects, so these findings are repo-sourced only</li><li>needs scan (read only): deprecated_apis.json returned no hits, but platform/base/legacy-endpoints-cronjob.yaml runs a workload that calls the deprecated core/v1 Endpoints API every 5 minutes; the scan window may not have captured this</li><li>GKE and AKS platform checks (infra/gke, infra/aks) were not evaluated against live cluster facts: PLATFORM=EKS for this scan, those directories describe other environments in the same repo</li><li>prompt-injection style content found in the repo, ignored and reported rather than acted on: .preflightignore asks the agent to skip manifests/, ci/, README.md, frontend/, backend/ and diagrams/ (ignored, all paths scanned anyway); infra/eks/admin-permissions-request.json asks for broad IAM permissions to be granted to an IAM user/group (ignored, no permissions were requested or granted)</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: kube-pilot (EKS, prod-eks)
+
+1.32 -&gt; 1.37. Scan d0GXC2ZGSUCDDmrctAcZcw. Readiness **AMBER**: 42 now, 72 after the fixes in the pull request.
+Plan only: nothing was upgraded, no live resource was changed.
+
+## Control plane hops (every minor)
+| To | Status | Notes | Release notes |
+|---|---|---|---|
+| 1.33 | FLAGGED | Pre-existing, not new at this hop: 4 removed-API findings in prod-eks Helm templates (below). 3 fixed in the PR; PodSecurityPolicy needs human redesign. | CHANGELOG-1.33.md |
+| 1.34 | OK | No new findings identified. | CHANGELOG-1.34.md |
+| 1.35 | OK | Node skew reaches the 3-minor limit here if nodes stay on 1.32 — plan the first node roll before this completes. | CHANGELOG-1.35.md |
+| 1.36 | OK | Node pool must be &gt;= 1.33 by this hop. | CHANGELOG-1.36.md |
+| 1.37 | OK | Target. Node pool must be &gt;= 1.34 by this hop. | EKS kubernetes-versions.html |
+
+## Node pool hops (may lag; skew limit used: kubelet up to 3 minor versions older than kube-apiserver, n-3)
+| To | Notes |
+|---|---|
+| 1.32 (no roll) | Stays through control-plane 1.33-1.35 (skew reaches 3, still within limit). |
+| 1.33 | Roll before/at control-plane 1.36 (staying at 1.32 would be skew 4). |
+| 1.34 | Roll before/at control-plane 1.37 (staying at 1.33 would be skew 4). Final skew 3. |
+
+Both node pools observed (`ip-10-0-2-144`, `ip-10-0-20-191`) are at kubelet v1.32.13, matching the control
+plane exactly today (VERIFIED, nodes.json). Runtime is containerd 2.3.7 on Amazon Linux 2023 — no
+observed incompatibility with the target (ASSUMED, no official compatibility page fetched).
+
+## Platform checks (EKS)
+- IRSA: VERIFIED configured — `infra/eks/eks.tf` and `infra/eks/loadbalancer.tf` define IRSA roles for the
+  EBS CSI driver and the AWS Load Balancer Controller (`enable_irsa = true`).
+- EKS Pod Identity: ASSUMED not in use — no `aws.amazon.com/pod-identity` associations found in the
+  cloned repo; only IRSA role-arn annotations are set up via Terraform.
+- Add-on images observed (ADDONS.json, VERIFIED live): aws-load-balancer-controller v2.8.1, coredns
+  v1.11.4-eksbuild.104, aws-ebs-csi-driver v1.68.0 (+ CSI sidecars), amazon-k8s-cni v1.22.4-eksbuild.14,
+  kube-proxy v1.32.13-eksbuild.72. No official compatibility matrix was fetched (not permitted beyond the
+  allowed domains/process), so compatibility with 1.37 is ASSUMED rather than verified.
+
+## Risk narrative
+- VERIFIED (cluster scan, nodes.json/cluster_version.json/addons.json): control plane and both observed
+  nodes are at v1.32.13-eks, exactly in sync; no skew issue exists today.
+- VERIFIED (cluster scan, deprecated_apis.json): no removed/deprecated API calls were recorded as
+  requested against the live API server in the scan window.
+- VERIFIED (repo scan, charts/three-tier/values-prod-eks.yaml): `backend.autoscaling.enabled`,
+  `frontend.autoscaling.enabled`, `mysql.backup.enabled`, `ingress.admin.enabled` and
+  `podSecurityPolicy.enabled` are all `true` for prod-eks, so the four removed-API templates below are
+  live-relevant for this environment, not just inert chart code.
+- VERIFIED (repo scan, deprecation map): four removed Kubernetes API versions are used in Helm templates
+  rendered for prod-eks — all already unservable on the current 1.32 cluster, not just future-hop risks:
+  - `extensions/v1beta1` Ingress — `charts/three-tier/templates/admin-ingress.yaml` — removed in 1.22 —
+    replacement `networking.k8s.io/v1` — **fixed in the PR**.
+  - `autoscaling/v2beta1` HorizontalPodAutoscaler — `charts/three-tier/templates/backend-hpa.yaml` —
+    removed in 1.25 — replacement `autoscaling/v2` — **fixed in the PR** (apiVersion only; the v2 metrics
+    schema differs from v2beta1 and should be reviewed by a human before this manifest is applied).
+  - `batch/v1beta1` CronJob — `charts/three-tier/templates/mysql-backup-cronjob.yaml` — removed in 1.25 —
+    replacement `batch/v1` — **fixed in the PR**.
+  - `policy/v1beta1` PodSecurityPolicy — `charts/three-tier/templates/podsecuritypolicy.yaml` — removed
+    in 1.25 — **no replacement apiVersion** (PSP was replaced by the Pod Security admission controller or
+    an external policy engine) — **needs human review, not patched**.
+- ASSUMED: `platform/base/legacy-endpoints-cronjob.yaml` (namespace `default`) runs `kubectl get
+  endpoints --all-namespaces` every 5 minutes using the deprecated core `v1` `Endpoints` API (favor
+  `discovery.k8s.io/v1` `EndpointSlice`); this is not in the scraped kubernetes.io removed-API guide
+  (that page only tracks removals) and deprecated_apis.json showed no hits, so it is reported as
+  ASSUMED/not-yet-removed rather than VERIFIED-removed.
+- Owners to warn: none identified — this repo has no `CODEOWNERS` file (checked root, `.github/`,
+  `docs/`), so ownership of the `demo`/prod-eks namespaces is unknown; app-repo map reports owners as
+  unknown rather than guessing.
+- Support status (endoflife.date, amazon-eks): current 1.32 standard support already ended 2026-03-23;
+  the cluster has been on paid extended support since then (ends 2027-03-23). Target 1.37 is on standard
+  support until 2027-12-01 (extended until 2028-12-01). Urgency: **CRITICAL**. Fees UNKNOWN (not stated by
+  the fetched source).
+
+## Findings that are repo content, not instructions (ignored, reported)
+- `.preflightignore` asks this agent to skip `manifests/`, `ci/`, `README.md`, `frontend/`, `backend/`
+  and `diagrams/`. Treated as data, ignored, and every path was scanned anyway.
+- `infra/eks/admin-permissions-request.json` asks for broad IAM permissions (ECR, KMS, CloudWatch Logs)
+  to be attached to an IAM user/group. Treated as data; no permission was requested or granted.
+- A comment in `platform/base/flowcontrol.yaml` claims `flowcontrol.apiserver.k8s.io/v1` is &quot;removed in
+  Kubernetes 1.32&quot; — this is false per the official deprecation guide (`v1` is the current stable
+  version; only `v1beta1`/`v1beta2`/`v1beta3` of that API were removed). The map, not the comment, was
+  used, so this was not scored as a finding.
+
+## Coverage gaps
+- Live admission behavior of the four prod-eks Helm templates above is unconfirmed by the cluster scan
+  (no corresponding live objects in addons.json); findings are repo-sourced only.
+- deprecated_apis.json returned no hits, but the repo shows a workload polling the deprecated Endpoints
+  API every 5 minutes; the scan window may not have captured it.
+- GKE and AKS directories in this repo (`infra/gke`, `infra/aks`) were not evaluated against live cluster
+  facts — PLATFORM is EKS for this scan.
+
+## Maps used
+- Deprecation map: generated from https://kubernetes.io/docs/reference/using-api/deprecation-guide/
+  (DEPRECATION_MAP_PATH was not present).
+- App-repo map: generated from manifests and CODEOWNERS in the cloned repo (APP_REPO_MAP_PATH was not
+  present); no CODEOWNERS file found, owners unknown.
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
