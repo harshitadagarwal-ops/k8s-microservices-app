@@ -26,9 +26,17 @@ backend:
   pdb:
     enabled: false
     minAvailable: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 75
 
 mysql:
   image: mysql:8.0
+  backup:
+    enabled: false
+    schedule: "0 2 * * *"
   replicas: 1
   database: appdb
   persistence:
@@ -51,6 +59,9 @@ serviceAccount:
   annotations: {}
 
 ingress:
+  admin:
+    enabled: false
+    host: admin.three-tier.local
   enabled: true
   className: nginx
   host: three-tier.local
@@ -58,3 +69,5 @@ ingress:
   tls:
     enabled: false
     clusterIssuer: ""
+podSecurityPolicy:
+  enabled: false

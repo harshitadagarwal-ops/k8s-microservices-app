@@ -1,0 +1,20 @@
+{{- $a := .Values.ingress.admin }}
+{{- if $a.enabled }}
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: backend-admin
+  labels:
+    {{- include "three-tier.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className }}
+spec:
+  rules:
+    - host: {{ $a.host }}
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: backend
+              servicePort: {{ .Values.backend.port }}
+{{- end }}

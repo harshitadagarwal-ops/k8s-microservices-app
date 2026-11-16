@@ -1,0 +1,22 @@
+{{- if .Values.backend.autoscaling.enabled -}}
+{{- $a := .Values.backend.autoscaling }}
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend
+  labels:
+    app: backend
+    {{- include "three-tier.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: {{ $a.minReplicas }}
+  maxReplicas: {{ $a.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        targetAverageUtilization: {{ $a.targetCPUUtilizationPercentage }}
+{{- end }}

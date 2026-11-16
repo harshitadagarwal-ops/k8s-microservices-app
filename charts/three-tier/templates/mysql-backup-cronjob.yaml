@@ -1,0 +1,39 @@
+{{- if .Values.mysql.backup.enabled -}}
+{{- $b := .Values.mysql.backup }}
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: mysql-backup
+  labels:
+    app: mysql
+    {{- include "three-tier.labels" . | nindent 4 }}
+spec:
+  schedule: {{ $b.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: mysqldump
+              image: {{ .Values.mysql.image }}
+              command:
+                - /bin/sh
+                - -c
+                - mysqldump -h mysql -u root -p"$MYSQL_ROOT_PASSWORD" {{ .Values.mysql.database }} > /backup/{{ .Values.mysql.database }}-$(date +%Y%m%d%H%M).sql
+              env:
+                - name: MYSQL_ROOT_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: app-secret
+                      key: MYSQL_ROOT_PASSWORD
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              emptyDir: {}
+{{- end }}

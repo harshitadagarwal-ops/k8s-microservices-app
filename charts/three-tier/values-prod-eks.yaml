@@ -15,12 +15,20 @@ backend:
   pdb:
     enabled: true
     minAvailable: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 75
 
 mysql:
   persistence:
     enabled: true
     size: 20Gi
     storageClass: gp3
+  backup:
+    enabled: true
+    schedule: "30 1 * * *"
 
 serviceAccount:
   annotations:
@@ -28,6 +36,11 @@ serviceAccount:
 
 ingress:
   host: three-tier.prod.example.com
+  admin:
+    enabled: true
+    host: admin.three-tier.prod.example.com
   tls:
     enabled: true
     clusterIssuer: letsencrypt-prod
+podSecurityPolicy:
+  enabled: true
