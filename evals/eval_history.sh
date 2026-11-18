@@ -9,14 +9,17 @@ F=$D/output.json; C=$D/eval_code.json; J=$D/judge.json; X=$D/eval_explanation.md
 
 jfile() { if [ -s "$1" ] && jq -e . "$1" >/dev/null 2>&1; then jq -c . "$1"; else echo null; fi; }
 rf()    { if [ -f "$1" ]; then echo "$1"; else : > /tmp/empty.txt; echo /tmp/empty.txt; fi; }
-clean() { case "${1:-}" in ""|"<+"*) printf '%s' "$2" ;; *) printf '%s' "$1" | tr ',\n' '; ' ;; esac; }
+clean() { case "${1:-}" in ""|"null"|"<+"*) printf '%s' "$2" ;; *) printf '%s' "$1" | tr ',\n' '; ' ;; esac; }
 
 ZONE=NONE; [ -s "$F" ] && ZONE=$(jq -r '.score.zone // "NONE"' "$F" 2>/dev/null || echo NONE)
 PASSED=0; TOTAL=0; CODE=not_run
 if [ -s "$C" ]; then PASSED=$(jq -r '.passed' "$C"); TOTAL=$(jq -r '.total' "$C"); CODE=$(jq -r '.result' "$C"); fi
 JUDGE=$(clean "${JUDGE_OVERALL:-}" not_run); JFAIL=$(clean "${JUDGE_FAILED:-}" "")
 JSUM=$(clean "${JUDGE_SUMMARY:-}" ""); ESUM=$(clean "${EXPLANATION_SUMMARY:-}" "")
-OVERALL=FAIL; [ "$CODE" = "PASS" ] && [ "$JUDGE" = "PASS" ] && OVERALL=PASS
+# NOT_RUN = the Preflight agent never produced output (for example Cluster Scan rejected the inputs), so nothing was graded
+if [ "$CODE" = "not_run" ]; then OVERALL=NOT_RUN
+elif [ "$CODE" = "PASS" ] && [ "$JUDGE" = "PASS" ]; then OVERALL=PASS
+else OVERALL=FAIL; fi
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 Q="accountIdentifier=${HARNESS_ACCOUNT}&orgIdentifier=${HARNESS_ORG}&projectIdentifier=${HARNESS_PROJECT}"
@@ -61,7 +64,7 @@ up2=000; [ -s "$B" ] && up2=$(upload "$BID" "$B" application/json POST json)
 ok() { [ "${1:0:1}" = "2" ] && echo saved || echo "NOT saved (HTTP $1)"; }
 echo "================ Eval history: $PIPELINE_ID ================"
 echo "This run : overall=$OVERALL zone=$ZONE code=$CODE ($PASSED/$TOTAL) judge=$JUDGE $JFAIL"
-awk -F, 'NR>1 { r++; if ($9=="PASS") p++ } END { printf "All runs : %d run(s), overall PASS in %d\n", r, p }' "$L"
+awk -F, 'NR>1 { r++; if ($9=="NOT_RUN") n++; else { s++; if ($9=="PASS") p++ } } END { printf "All runs : %d run(s): %d graded (%d PASS), %d not run\n", r, s, p, n }' "$L"
 echo "Ledger   : $LID.csv -> $(ok "$up1")"
 echo "Detail   : $BID.json -> $(ok "$up2")"
 echo "Last runs:"; tail -n 5 "$L"
