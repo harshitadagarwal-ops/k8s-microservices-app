@@ -12,7 +12,7 @@ variable "cluster_name" {
 
 variable "cluster_version" {
   type        = string
-  default     = "1.34"
+  default     = "1.33"
   description = "Kubernetes control plane version."
 }
 
