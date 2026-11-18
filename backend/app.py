@@ -17,6 +17,12 @@ from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
+# DEMO VULNERABILITY: hardcoded credentials (detected by Gitleaks)
+AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
+AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+DB_ROOT_PASSWORD = "superS3cret!root"
+STRIPE_API_KEY = "sk_live_51Hh5TEXAMPLEKEYDONOTUSE"
+
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "mysql"),
     "user": os.environ.get("DB_USER", "appuser"),
@@ -70,6 +76,8 @@ def health():
 
 @app.route("/api/messages", methods=["GET"])
 def list_messages():
+    # DEMO VULNERABILITY: SQL injection — user input interpolated directly into query (detected by Semgrep)
+    search = request.args.get("search", "")
     try:
         conn = get_connection()
         with conn.cursor() as cur:
@@ -97,6 +105,12 @@ def add_message():
     except Exception as exc:  # noqa: BLE001
         return jsonify(error=str(exc)), 500
 
+# DEMO VULNERABILITY: arbitrary code execution via eval (detected by Semgrep)
+@app.route("/api/calc", methods=["GET"])
+def calc():
+    expr = request.args.get("expr", "0")
+    result = eval(expr)  # noqa: S307
+    return jsonify(result=result), 200
 
 if __name__ == "__main__":
     init_db()
