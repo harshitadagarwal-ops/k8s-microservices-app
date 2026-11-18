@@ -49,4 +49,4 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - "kubectl get endpoints --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.name}{\" \"}{.subsets[*].addresses[*].ip}{\"\\n\"}{end}'"
+                - kubectl get endpointslices.discovery.k8s.io. --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.name}{\" \"}{.subsets[*].addresses[*].ip}{\"\\n\"}{end}'"
