@@ -1,0 +1,53 @@
+{
+    "identifier":  "preflight_result_cns",
+    "account":  "gLXLxjTmQhGmdJXhAORKag",
+    "org":  "Worker_Agents_Hackathon",
+    "project":  "Team_KubePilots",
+    "status":  "ENABLED",
+    "last_modified":  1794839167355,
+    "created":  null,
+    "name":  "Preflight Result centralised",
+    "notification_conditions":  [
+                                    {
+                                        "condition_name":  "Preflight finished",
+                                        "notification_event_configs":  [
+                                                                           {
+                                                                               "notification_entity":  "PIPELINE",
+                                                                               "notification_event_data":  {
+                                                                                                               "type":  "PIPELINE",
+                                                                                                               "scope_identifiers":  [
+
+                                                                                                                                     ]
+                                                                                                           },
+                                                                               "notification_event":  "PIPELINE_SUCCESS",
+                                                                               "entity_identifiers":  [
+
+                                                                                                      ]
+                                                                           },
+                                                                           {
+                                                                               "notification_entity":  "PIPELINE",
+                                                                               "notification_event_data":  {
+                                                                                                               "type":  "PIPELINE",
+                                                                                                               "scope_identifiers":  [
+
+                                                                                                                                     ]
+                                                                                                           },
+                                                                               "notification_event":  "PIPELINE_FAILED",
+                                                                               "entity_identifiers":  [
+
+                                                                                                      ]
+                                                                           }
+                                                                       ]
+                                    }
+                                ],
+    "notification_channel_refs":  [
+                                      "preflight_email"
+                                  ],
+    "custom_notification_template_ref":  {
+                                             "template_ref":  "Preflight_Result_Email",
+                                             "version_label":  "v3",
+                                             "variables":  [
+
+                                                           ]
+                                         }
+}

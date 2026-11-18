@@ -1,7 +1,10 @@
+############################################################
 # kube-pilot EKS cluster — deployable and reachable.
-#   - public API endpoint        -> so kubectl / Argo CD work from your laptop
-#   - Graviton (ARM) + Spot nodes -> cost-optimized (see node group below)
-#   - EBS CSI driver add-on + IRSA -> so the app's MySQL gp3 PVC can bind
+#
+# - Public API endpoint for kubectl / Argo CD
+# - Graviton (ARM) + Spot nodes for cost optimization
+# - EBS CSI driver add-on + IRSA for MySQL gp3 PVC
+############################################################
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
@@ -13,20 +16,20 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  # Reachable from outside the VPC for a hands-on practical.
+  # Reachable from outside the VPC for hands-on practical.
   cluster_endpoint_public_access  = true
   cluster_endpoint_private_access = true
 
   enable_irsa = true
 
-  # This account's role lacks kms:TagResource and logs:CreateLogGroup, so the
-  # module's optional KMS secret-encryption key and CloudWatch control-plane
-  # logging are disabled. Secrets still work (stored unencrypted-at-rest by the
-  # default AWS-managed mechanism); control-plane logs just aren't shipped.
-  create_kms_key                         = false
-  cluster_encryption_config              = {}
-  create_cloudwatch_log_group            = false
-  cluster_enabled_log_types              = []
+  # This account's role lacks kms:TagResource and
+  # logs:CreateLogGroup, so optional KMS secret encryption
+  # key and CloudWatch control-plane logging are disabled.
+  # Secrets still work with the existing EKS configuration.
+  create_kms_key              = false
+  cluster_encryption_config   = {}
+  create_cloudwatch_log_group = false
+  cluster_enabled_log_types   = []
 
   # Cluster admins are listed explicitly (var.cluster_admin_arns). The module's
   # "cluster creator" option is OFF on purpose: it grants admin only to whoever runs
@@ -34,36 +37,75 @@ module "eks" {
   # member out of the cluster on 2026-11-18.
   enable_cluster_creator_admin_permissions = false
 
-  access_entries = {
-    for name, arn in var.cluster_admin_arns : name => {
-      principal_arn = arn
-      policy_associations = {
-        admin = {
-          policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-          access_scope = { type = "cluster" }
+  # One access_entries map (Terraform allows the argument only once):
+  # the cluster admins from var.cluster_admin_arns, merged with the
+  # read-only Harness OIDC monitoring entry.
+  access_entries = merge(
+    {
+      for name, arn in var.cluster_admin_arns : name => {
+        principal_arn = arn
+        policy_associations = {
+          admin = {
+            policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+            access_scope = { type = "cluster" }
+          }
+        }
+      }
+    },
+    {
+      ##########################################################
+      # HARNESS OIDC MONITORING ACCESS (read-only)
+      ##########################################################
+      harness_monitoring = {
+        principal_arn = "arn:aws:iam::105673693246:role/harness-oidc-admin-role"
+
+        type = "STANDARD"
+
+        kubernetes_groups = [
+          "harness-eks-monitoring"
+        ]
+
+        policy_associations = {
+          monitoring_view = {
+            policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
+
+            access_scope = {
+              type = "cluster"
+            }
+          }
         }
       }
     }
-  }
+  )
+
+  ##########################################################
+  # EXISTING EKS ADD-ONS
+  ##########################################################
 
   cluster_addons = {
     coredns    = {}
     kube-proxy = {}
     vpc-cni    = {}
+
     aws-ebs-csi-driver = {
       service_account_role_arn = module.ebs_csi_irsa.iam_role_arn
     }
   }
 
+  ##########################################################
+  # EXISTING MANAGED NODE GROUPS
+  ##########################################################
+
   eks_managed_node_groups = {
+
     # Graviton (ARM) + Spot for cost savings:
-    #   - AL2023_ARM_64_STANDARD  -> Graviton AMI (~20% cheaper than x86)
-    #   - capacity_type SPOT       -> up to ~70% off on-demand
-    #   - t4g.medium               -> Graviton equiv of t3.medium (2 vCPU / 4 GiB)
-    #     kept at medium (not smaller) because node memory requests ~83% and the
-    #     Harness delegate alone requests ~2Gi; smaller would break scheduling.
-    # NOTE: all container images must have arm64 builds (app images rebuilt
-    # multi-arch; delegate image is already multi-arch).
+    #
+    # - AL2023_ARM_64_STANDARD: Graviton AMI
+    # - SPOT capacity for cost savings
+    # - t4g.medium: 2 vCPU / 4 GiB example
+    #
+    # Keep ARM64-compatible images for workloads.
+
     general = {
       ami_type       = "AL2023_ARM_64_STANDARD"
       capacity_type  = "SPOT"
@@ -74,10 +116,12 @@ module "eks" {
       desired_size = var.node_desired_size
     }
 
-    # Small On-Demand Graviton node reserved for the Harness delegate, so Spot
-    # reclaims of the "general" group can't take the delegate down. The taint
-    # keeps app pods off it; the delegate gets a matching toleration and a
-    # nodeSelector (see infra/delegate/values.yaml).
+    # Small On-Demand Graviton node reserved for
+    # the Harness delegate.
+    #
+    # Taint prevents application pods from scheduling
+    # unless they have a matching toleration.
+
     delegate = {
       ami_type       = "AL2023_ARM_64_STANDARD"
       capacity_type  = "ON_DEMAND"
@@ -90,6 +134,7 @@ module "eks" {
       labels = {
         workload = "harness-delegate"
       }
+
       taints = {
         delegate = {
           key    = "dedicated"
@@ -103,40 +148,157 @@ module "eks" {
   tags = var.tags
 }
 
-# IRSA role for the EBS CSI driver so it can create/attach EBS volumes.
+############################################################
+# EXISTING CODE - EBS CSI DRIVER IRSA ROLE
+############################################################
+
+# IRSA role for the EBS CSI driver so it can
+# create/attach EBS volumes.
+#
+# The original kube-pilot-ebs-csi role was orphaned.
+# Retain the existing v3 role name.
+
 module "ebs_csi_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.44"
 
-  # "-v2": the original kube-pilot-ebs-csi role is orphaned in IAM (this user
-  # can't delete or re-trust IAM roles), so rebuilds use a fresh role name.
   role_name             = "${var.cluster_name}-ebs-csi-v4"
   attach_ebs_csi_policy = true
 
   oidc_providers = {
     main = {
-      provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["kube-system:ebs-csi-controller-sa"]
+      provider_arn = module.eks.oidc_provider_arn
+
+      namespace_service_accounts = [
+        "kube-system:ebs-csi-controller-sa"
+      ]
     }
   }
 
   tags = var.tags
 }
 
-# Default gp3 StorageClass so PVCs like the app's MySQL volume bind automatically.
+############################################################
+# EXISTING CODE - DEFAULT GP3 STORAGE CLASS
+############################################################
+
+# Default gp3 StorageClass so PVCs like the
+# application's MySQL volume bind automatically.
+
 resource "kubernetes_storage_class_v1" "gp3" {
   metadata {
     name = "gp3"
+
     annotations = {
       "storageclass.kubernetes.io/is-default-class" = "true"
     }
   }
-  storage_provisioner    = "ebs.csi.aws.com"
+
+  storage_provisioner = "ebs.csi.aws.com"
+
   volume_binding_mode    = "WaitForFirstConsumer"
   allow_volume_expansion = true
+
   parameters = {
     type = "gp3"
   }
 
   depends_on = [module.eks]
 }
+
+############################################################
+# NEW CODE START - KUBERNETES MONITORING CLUSTER ROLE
+############################################################
+
+# Provides read-only access to:
+# - Kubernetes nodes and node status
+# - Pods and pod status
+# - Namespaces
+# - Events
+# - Node CPU and memory metrics
+# - Pod CPU and memory metrics
+
+resource "kubernetes_cluster_role_v1" "harness_monitoring" {
+  metadata {
+    name = "harness-eks-monitoring-readonly"
+  }
+
+  ##########################################################
+  # READ NODES, PODS, NAMESPACES, EVENTS
+  ##########################################################
+
+  rule {
+    api_groups = [""]
+
+    resources = [
+      "nodes",
+      "nodes/status",
+      "pods",
+      "pods/status",
+      "namespaces",
+      "events"
+    ]
+
+    verbs = [
+      "get",
+      "list",
+      "watch"
+    ]
+  }
+
+  ##########################################################
+  # READ NODE AND POD CPU/MEMORY METRICS
+  ##########################################################
+
+  rule {
+    api_groups = [
+      "metrics.k8s.io"
+    ]
+
+    resources = [
+      "nodes",
+      "pods"
+    ]
+
+    verbs = [
+      "get",
+      "list"
+    ]
+  }
+
+  depends_on = [module.eks]
+}
+
+############################################################
+# NEW CODE END - KUBERNETES MONITORING CLUSTER ROLE
+############################################################
+
+############################################################
+# NEW CODE START - HARNESS MONITORING ROLE BINDING
+############################################################
+
+# Connect the Kubernetes group assigned to the
+# Harness IAM access entry with the monitoring ClusterRole.
+
+resource "kubernetes_cluster_role_binding_v1" "harness_monitoring" {
+  metadata {
+    name = "harness-eks-monitoring-binding"
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+
+    name = kubernetes_cluster_role_v1.harness_monitoring.metadata[0].name
+  }
+
+  subject {
+    kind      = "Group"
+    name      = "harness-eks-monitoring"
+    api_group = "rbac.authorization.k8s.io"
+  }
+}
+
+############################################################
+# NEW CODE END - HARNESS MONITORING ROLE BINDING
+############################################################

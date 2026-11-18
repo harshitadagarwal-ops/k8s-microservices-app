@@ -1,0 +1,46 @@
+template:
+  name: Preflight Result Email
+  identifier: Preflight_Result_Email
+  versionLabel: v1
+  type: Notification
+  projectIdentifier: Team_KubePilots
+  orgIdentifier: Worker_Agents_Hackathon
+  tags: {}
+  spec:
+    body:
+      type: STRING
+      content: |-
+        subject: Preflight <+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.ZONE>: <+pipeline.variables.target_env> <+pipeline.variables.current_version> -> <+pipeline.variables.target_version> (score <+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.SCORE_INITIAL> -> <+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.SCORE_PROJECTED>)
+        body: <div style="background:#f1f3f4;padding:20px 0;font-family:Arial,Helvetica,sans-serif;color:#202124">
+        <table role="presentation" width="680" align="center" cellpadding="0" cellspacing="0" style="max-width:680px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden">
+        <tr><td style="background:<+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.ZONE_COLOR>;padding:22px 26px;color:#ffffff">
+        <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;opacity:.9">Preflight K8s Upgrade Readiness</div>
+        <div style="font-size:28px;font-weight:bold;margin-top:4px"><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.ZONE></div>
+        <div style="font-size:14px;margin-top:4px"><+pipeline.variables.target_env> (<+pipeline.variables.platform>) &nbsp;|&nbsp; <+pipeline.variables.current_version> &rarr; <+pipeline.variables.target_version></div>
+        </td></tr>
+        <tr><td style="padding:20px 26px 6px 26px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="width:33%;padding:10px;background:#f8f9fa;border-radius:6px;text-align:center"><div style="font-size:11px;color:#5f6368">SCORE NOW</div><div style="font-size:26px;font-weight:bold"><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.SCORE_INITIAL></div></td>
+        <td style="width:4%"></td>
+        <td style="width:33%;padding:10px;background:#f8f9fa;border-radius:6px;text-align:center"><div style="font-size:11px;color:#5f6368">AFTER FIX PRS</div><div style="font-size:26px;font-weight:bold"><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.SCORE_PROJECTED></div></td>
+        <td style="width:4%"></td>
+        <td style="width:26%;padding:10px;background:#f8f9fa;border-radius:6px;text-align:center"><div style="font-size:11px;color:#5f6368">FIX PRS</div><div style="font-size:26px;font-weight:bold"><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.PR_COUNT></div></td>
+        </tr></table>
+        <p style="font-size:14px;margin:16px 0 0 0"><b>Next step:</b> <+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.NEXT_ACTION></p>
+        <p style="font-size:13px;color:#5f6368;margin:6px 0 0 0">Findings: <+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.FINDINGS_SUMMARY></p>
+        </td></tr>
+        <tr><td style="padding:18px 26px 0 26px"><div style="font-size:15px;font-weight:bold;margin-bottom:8px">Upgrade path</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f8f9fa;font-size:12px;color:#5f6368;text-align:left"><th style="padding:7px 10px">Hop</th><th style="padding:7px 10px">Status</th><th style="padding:7px 10px">Removed APIs</th><th style="padding:7px 10px">Notes</th></tr><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.HOPS_HTML></table></td></tr>
+        <tr><td style="padding:18px 26px 0 26px"><div style="font-size:15px;font-weight:bold;margin-bottom:8px">Top blockers and risks</div><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.BLOCKERS_HTML></td></tr>
+        <tr><td style="padding:18px 26px 0 26px"><div style="font-size:15px;font-weight:bold;margin-bottom:8px">Fix pull requests</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f8f9fa;font-size:12px;color:#5f6368;text-align:left"><th style="padding:7px 10px">PR</th><th style="padding:7px 10px">Hop</th><th style="padding:7px 10px">What it fixes</th></tr><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.PRS_HTML></table></td></tr>
+        <tr><td style="padding:18px 26px 0 26px"><div style="font-size:15px;font-weight:bold;margin-bottom:8px">Score breakdown</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f8f9fa;font-size:12px;color:#5f6368;text-align:left"><th style="padding:7px 10px">Category</th><th style="padding:7px 10px">Now</th><th style="padding:7px 10px">After</th><th style="padding:7px 10px">Why</th></tr><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.SCORE_HTML></table></td></tr>
+        <tr><td style="padding:18px 26px 0 26px"><div style="font-size:15px;font-weight:bold;margin-bottom:8px">Top findings</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr style="background:#f8f9fa;font-size:12px;color:#5f6368;text-align:left"><th style="padding:7px 10px">Severity</th><th style="padding:7px 10px">Resource</th><th style="padding:7px 10px">Evidence</th></tr><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.FINDINGS_HTML></table></td></tr>
+        <tr><td style="padding:18px 26px 0 26px"><div style="font-size:15px;font-weight:bold;margin-bottom:8px">Kubernetes support and cost</div><div style="font-size:13px"><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.SUPPORT_HTML></div></td></tr>
+        <tr><td style="padding:18px 26px 0 26px"><div style="font-size:15px;font-weight:bold;margin-bottom:8px">Coverage gaps</div><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.GAPS_HTML></td></tr>
+        <tr><td style="padding:18px 26px 0 26px"><div style="font-size:15px;font-weight:bold;margin-bottom:8px">Official release notes</div><div style="font-size:13px"><+pipeline.stages.Preflight.spec.execution.steps.Read_Agent_Output.output.outputVariables.NOTES_HTML></div></td></tr>
+        <tr><td style="padding:22px 26px 24px 26px;font-size:12px;color:#5f6368">Scan ID <+pipeline.executionId> &nbsp;|&nbsp; <a href="<+pipeline.executionUrl>" style="color:#1a73e8">Open the pipeline run</a> (full agent plan is in the Format Agent Report step log)<br>Plan only: the agent never changed the live cluster.</td></tr>
+        </table></div>
+    variables: []
