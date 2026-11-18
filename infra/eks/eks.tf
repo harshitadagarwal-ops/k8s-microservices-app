@@ -37,47 +37,46 @@ module "eks" {
   # member out of the cluster on 2026-11-18.
   enable_cluster_creator_admin_permissions = false
 
-  access_entries = {
-    for name, arn in var.cluster_admin_arns : name => {
-      principal_arn = arn
-      policy_associations = {
-        admin = {
-          policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-          access_scope = { type = "cluster" }
+  # One access_entries map (Terraform allows the argument only once):
+  # the cluster admins from var.cluster_admin_arns, merged with the
+  # read-only Harness OIDC monitoring entry.
+  access_entries = merge(
+    {
+      for name, arn in var.cluster_admin_arns : name => {
+        principal_arn = arn
+        policy_associations = {
+          admin = {
+            policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+            access_scope = { type = "cluster" }
+          }
         }
       }
-    }
-  }
+    },
+    {
+      ##########################################################
+      # HARNESS OIDC MONITORING ACCESS (read-only)
+      ##########################################################
+      harness_monitoring = {
+        principal_arn = "arn:aws:iam::105673693246:role/harness-oidc-admin-role"
 
-  ##########################################################
-  # NEW CODE START - HARNESS OIDC MONITORING ACCESS
-  ##########################################################
+        type = "STANDARD"
 
-  access_entries = {
-    harness_monitoring = {
-      principal_arn = "arn:aws:iam::105673693246:role/harness-oidc-admin-role"
+        kubernetes_groups = [
+          "harness-eks-monitoring"
+        ]
 
-      type = "STANDARD"
+        policy_associations = {
+          monitoring_view = {
+            policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
 
-      kubernetes_groups = [
-        "harness-eks-monitoring"
-      ]
-
-      policy_associations = {
-        monitoring_view = {
-          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
-
-          access_scope = {
-            type = "cluster"
+            access_scope = {
+              type = "cluster"
+            }
           }
         }
       }
     }
-  }
-
-  ##########################################################
-  # NEW CODE END - HARNESS OIDC MONITORING ACCESS
-  ##########################################################
+  )
 
   ##########################################################
   # EXISTING EKS ADD-ONS
@@ -163,7 +162,7 @@ module "ebs_csi_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.44"
 
-  role_name             = "${var.cluster_name}-ebs-csi-v3"
+  role_name             = "${var.cluster_name}-ebs-csi-v4"
   attach_ebs_csi_policy = true
 
   oidc_providers = {
