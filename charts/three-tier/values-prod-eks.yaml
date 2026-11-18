@@ -43,4 +43,4 @@ ingress:
     enabled: true
     clusterIssuer: letsencrypt-prod
 podSecurityPolicy:
-  enabled: true
+  enabled: false
