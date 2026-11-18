@@ -1,0 +1,100 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.33 to 1.34</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan 0O-0VGGWRaqxS0yUC7I7lw</p>
+<p><span class=zAMBER>AMBER</span> readiness 47 now, 83 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.34</td><td>FLAGGED</td><td>Control plane hop 1.33 -&gt; 1.34 (single minor hop). Blocked for merge-readiness by: PodSecurityPolicy (policy/v1beta1) in charts/three-tier with no replacement API (removed since 1.25) needs manual migration (e.g. Pod Security Admission) before this chart can be safely rendered against post-1.25 API servers; v1 Endpoints usage is deprecated but still served, no action required yet. Namespace owners for charts/three-tier could not be determined (no CODEOWNERS file in this repo).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.34</td><td>Node pools (general-*, delegate-*) currently on kubelet v1.33.13-eks. Kubernetes version skew policy (effective since control plane v1.28) allows kubelet to run up to 3 minor versions (n-3) behind the control plane, so nodes are not required to move immediately after the control plane reaches 1.34. Recommended: roll node pools to 1.34 kubelet/AMI after the control plane hop completes and is verified healthy, to avoid accumulating skew before the next hop.</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>removed API policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy.yaml (removed 1.25, no replacement API, needs human review)</li><li>deprecated but not yet removed v1 Endpoints API still requested live in the cluster (replace with discovery.k8s.io EndpointSlice)</li><li>coverage gap: EKS platform prerequisites (IRSA/Pod Identity associations, control plane upgrade insights) not available from the read-only scan</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>removed API extensions/v1beta1 Ingress in charts/three-tier/templates/admin-ingress.yaml (removed 1.22, repo, prod-eks chart)</td><td>9</td><td>yes</td></tr><tr><td>removed API autoscaling/v2beta1 HorizontalPodAutoscaler in charts/three-tier/templates/backend-hpa.yaml (removed 1.25, repo, prod-eks chart)</td><td>9</td><td>yes</td></tr><tr><td>removed API policy/v1beta1 PodDisruptionBudget in charts/three-tier/templates/backend-pdb.yaml (removed 1.25, repo, prod-eks chart)</td><td>9</td><td>yes</td></tr><tr><td>removed API batch/v1beta1 CronJob in charts/three-tier/templates/mysql-backup-cronjob.yaml (removed 1.25, repo, prod-eks chart)</td><td>9</td><td>yes</td></tr><tr><td>removed API policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy.yaml (removed 1.25, no replacement API, needs human review)</td><td>9</td><td>no</td></tr><tr><td>deprecated but not yet removed v1 Endpoints API still requested live in the cluster (replace with discovery.k8s.io EndpointSlice)</td><td>3</td><td>no</td></tr><tr><td>coverage gap: EKS platform prerequisites (IRSA/Pod Identity associations, control plane upgrade insights) not available from the read-only scan</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>EXTENDED</td><td>2026-07-29</td><td>2027-07-29</td></tr><tr><td>target</td><td>STANDARD</td><td>2026-12-02</td><td>2027-12-02</td></tr></table><p>Urgency: CRITICAL</p>
+<h2>Coverage gaps</h2><ul><li>needs scan (read only): EKS platform prerequisites (IRSA/Pod Identity associations, control plane upgrade insights) were not collected by the cluster facts scan available to this run</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: 1.33 -&gt; 1.34
+
+Cluster `kube-pilot` | EKS | prod-eks | scan `0O-0VGGWRaqxS0yUC7I7lw`
+
+**Readiness: AMBER — 47 now, 83 projected after the fixes in the pull request (needs PR review and merge).**
+
+This is a plan only. Nothing in the live cluster was changed, and no cluster write/exec/delete
+command was ever issued by this run.
+
+## Control plane track (every minor)
+
+| To | Status | Notes | Release notes |
+|---|---|---|---|
+| 1.34 | FLAGGED | Single minor hop from the current server version v1.33.13-eks. Flagged because `charts/three-tier` (the chart used by `prod-eks` in both `gitops/prod-eks/apps.yaml` and `argocd/prod-eks/apps.yaml`) still contains a `PodSecurityPolicy` manifest with no replacement API, and because namespace owners for that chart could not be determined (no CODEOWNERS file in this repo). | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html |
+
+## Node pool track (may lag within the documented skew limit)
+
+Skew limit used: the Kubernetes version skew policy (effective since control plane v1.28) allows a
+kubelet to run up to **3 minor versions (n-3)** behind the kube-apiserver. VERIFIED from
+`nodes.json`: all 3 nodes (pools `general-20261118160028208800000001` and
+`delegate-2026111810572210660000000a`) are at kubelet `v1.33.13-eks`, matching the current control
+plane.
+
+| To | Notes |
+|---|---|
+| 1.34 | Not mandatory immediately (nodes at 1.33 stay within the n-3 skew once the control plane is 1.34). Recommended to roll node pools to 1.34 kubelet/AMI shortly after the control plane hop is verified healthy, to avoid carrying skew into a future hop. |
+
+## Risk narrative
+
+- **VERIFIED (live scan, `deprecated_apis.json`):** the API server logged a client request for the
+  deprecated `v1` `Endpoints` resource. This API is deprecated in favor of `discovery.k8s.io`
+  `EndpointSlice` but is still served; no release has scheduled its removal, so this is informational
+  only.
+- **VERIFIED (repo scan):** `charts/three-tier`, the Helm chart deployed by the `prod-eks` GitOps apps,
+  contained 5 manifests using Kubernetes API versions removed at or before 1.25:
+  - `admin-ingress.yaml` — `extensions/v1beta1` Ingress (removed 1.22) — **fixed in this PR** →
+    `networking.k8s.io/v1`
+  - `backend-hpa.yaml` — `autoscaling/v2beta1` HorizontalPodAutoscaler (removed 1.25) — **fixed in
+    this PR** → `autoscaling/v2`
+  - `backend-pdb.yaml` — `policy/v1beta1` PodDisruptionBudget (removed 1.25) — **fixed in this PR** →
+    `policy/v1`
+  - `mysql-backup-cronjob.yaml` — `batch/v1beta1` CronJob (removed 1.25) — **fixed in this PR** →
+    `batch/v1`
+  - `podsecuritypolicy.yaml` — `policy/v1beta1` PodSecurityPolicy (removed 1.25) — **not patched**,
+    the Kubernetes deprecation guide names no replacement API; needs a human decision (for example
+    Pod Security Admission labels or an admission-controller policy).
+  None of these removed manifests currently resolve live (the cluster already runs 1.33, which
+  rejects these API versions), so this is a repo-only risk that should be cleaned up before anyone
+  tries to re-apply this chart on a server at or beyond the removal version.
+- **VERIFIED (`addons.json`):** kube-system add-ons (aws-load-balancer-controller v2.8.1, CoreDNS
+  v1.12.4-eksbuild.82, EBS CSI driver v1.68.0, VPC CNI/aws-node v1.22.4-eksbuild.14) are present with
+  recent image tags. No incompatibility with 1.34 could be confirmed or ruled out without fetching the
+  EKS add-on compatibility matrix, which this run does not do — treat as **ASSUMED OK**, re-verify
+  against AWS&#x27;s published add-on version matrix before the hop.
+- **ASSUMED:** EKS platform prerequisites (IRSA role trust / Pod Identity associations, control-plane
+  upgrade insights) could not be checked — the collected cluster facts do not include IAM or
+  EKS-control-plane-API data. See coverage gaps.
+
+## Owners to warn
+
+The app-repo map was generated from the cloned repo (no `DEPRECATION_MAP_PATH` /
+`APP_REPO_MAP_PATH` file was present, so both maps were built in this run). This repo has no
+`CODEOWNERS` file, so owners for the affected namespaces/chart are **unknown** — do not guess; route
+the pull request to whoever maintains `charts/three-tier` and the `prod-eks` GitOps apps.
+
+## Support status
+
+| Version | Status | Standard end | Extended end |
+|---|---|---|---|
+| 1.33 (current) | EXTENDED | 2026-07-29 | 2027-07-29 |
+| 1.34 (target) | STANDARD | 2026-12-02 | 2027-12-02 |
+
+Urgency: **CRITICAL** — standard support for the current version (1.33) ended 2026-07-29 (today is
+2026-11-18); the cluster is now in EKS extended support. Fees: UNKNOWN (no official pricing page was
+fetched in this run).
+
+## Coverage gaps
+
+- needs scan (read only): EKS platform prerequisites (IRSA/Pod Identity associations, control plane
+  upgrade insights) were not collected by the cluster facts scan available to this run.
+
+## Release links
+
+- Kubernetes CHANGELOG for 1.34:
+  https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.34.md
+- EKS Kubernetes versions page:
+  https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
