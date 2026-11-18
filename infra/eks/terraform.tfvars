@@ -5,10 +5,10 @@ vpc_cidr        = "10.0.0.0/16"
 
 # Graviton (ARM) + Spot node group. >=2 vCPU types only (delegate needs 1 CPU).
 node_instance_types = [
-  "t4g.large", "t4g.xlarge",
-  "m6g.large", "m7g.large",
-  "c6g.large", "c7g.large",
-  "r6g.large",
+  "t4g.medium", "t4g.large", "t4g.xlarge",
+  "m6g.large", "m7g.large", "m8g.large", "m6g.xlarge", "m7g.xlarge",
+  "c6g.large", "c7g.large", "c8g.large", "c6g.xlarge", "c7g.xlarge",
+  "r6g.large", "r7g.large",
 ]
 node_min_size     = 2
 node_max_size     = 3
