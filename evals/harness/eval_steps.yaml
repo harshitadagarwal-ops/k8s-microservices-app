@@ -1,0 +1,122 @@
+# =====================================================================================
+# Paste these 4 steps at the END of the execution.steps list of the "Preflight" stage in
+# k8s_Preflight_Agent_Harshita (after "Agent Usage Report"). Indentation matches your file.
+# Order: Eval Grader (code) -> Eval Bot (agent) -> Eval Gate (one verdict) -> Eval History (File Store)
+# The eval files live in your repo under evals/ and are found automatically under /harness.
+# =====================================================================================
+              - step:
+                  type: Run
+                  name: Eval Grader
+                  identifier: Eval_Grader
+                  timeout: 2m
+                  spec:
+                    connectorRef: dockerhub
+                    image: python:3.12-alpine
+                    shell: Sh
+                    command: |-
+                      set -eu
+                      G=$(find /harness -maxdepth 4 -name grade_output.py 2>/dev/null | head -1)
+                      if [ -z "$G" ]; then echo "grade_output.py not found under /harness. Is the evals/ folder pushed to the repo this pipeline clones?"; ls /harness; exit 1; fi
+                      echo "Using grader: $G"
+                      F=/harness/preflight/output.json
+                      if [ "${CAPTURE_OUTPUT:-false}" = "true" ] && [ -s "$F" ]; then
+                        echo "----- OUTPUT_JSON_BEGIN -----"; cat "$F"; echo; echo "----- OUTPUT_JSON_END -----"
+                      fi
+                      python "$G" "$F" --current "$CURRENT_VERSION" --target "$TARGET_VERSION" --json-out /harness/preflight/eval_code.json
+                    envVariables:
+                      CURRENT_VERSION: <+pipeline.variables.current_version>
+                      TARGET_VERSION: <+pipeline.variables.target_version>
+                      CAPTURE_OUTPUT: "true"   # prints output.json to the log so you can save it as a fixture; set to "false" afterwards
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore   # a failed code check is recorded here and judged at the Eval Gate below
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.stages.Preflight.spec.execution.steps.Cluster_Scan.output.outputVariables.VALID> == "true"
+              - step:
+                  type: Agent
+                  name: Eval Bot
+                  identifier: Eval_Bot
+                  spec:
+                    agentName: ca_preflight_eval_bot
+                    agentSettings:   # mirror what your working Worker_Agent step passes here
+                      llm_connector: kubepilots_avyka_anthropic_connector
+                      scan_id: <+pipeline.executionId>
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore   # if the bot errors, the gate treats the judge result as FAIL
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: Run
+                  name: Eval Gate
+                  identifier: Eval_Gate
+                  timeout: 1m
+                  spec:
+                    connectorRef: dockerhub
+                    image: alpine/k8s:1.34.12
+                    shell: Bash
+                    command: |-
+                      C=/harness/preflight/eval_code.json
+                      CODE=not_run; P=0; T=0
+                      if [ -s "$C" ]; then CODE=$(jq -r '.result' "$C"); P=$(jq -r '.passed' "$C"); T=$(jq -r '.total' "$C"); fi
+                      echo "=============== EVAL SCORECARD ==============="
+                      echo "Code checks : $CODE ($P/$T)"
+                      [ -s "$C" ] && jq -r '.checks[] | select(.ok == false) | "   FAIL [\(.severity)] \(.name): \(.detail)"' "$C"
+                      echo "Judge       : $JUDGE_OVERALL (failed: $JUDGE_FAILED)"
+                      echo "Plan        : $JUDGE_SUMMARY"
+                      echo "Fix hint    : $EXPLANATION_SUMMARY"
+                      [ -s /harness/preflight/eval_explanation.md ] && { echo "---- explanation ----"; cat /harness/preflight/eval_explanation.md; }
+                      echo "=============================================="
+                      FAIL=0
+                      [ "$CODE" = "PASS" ] || FAIL=1
+                      [ "$JUDGE_OVERALL" = "PASS" ] || FAIL=1   # anything else, including an unresolved value, counts as FAIL
+                      if [ "$FAIL" = "1" ]; then echo "RESULT: FAIL"; exit 1; fi
+                      echo "RESULT: PASS"
+                    envVariables:
+                      # Verify the inner step name on the Eval Bot step's Output tab (copy icon). Usually <agentName>_1.
+                      JUDGE_OVERALL: <+pipeline.stages.Preflight.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.JUDGE_OVERALL>
+                      JUDGE_FAILED: <+pipeline.stages.Preflight.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.JUDGE_FAILED>
+                      JUDGE_SUMMARY: <+pipeline.stages.Preflight.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.JUDGE_SUMMARY>
+                      EXPLANATION_SUMMARY: <+pipeline.stages.Preflight.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.EXPLANATION_SUMMARY>
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: Run
+                  name: Eval History
+                  identifier: Eval_History
+                  timeout: 2m
+                  spec:
+                    connectorRef: dockerhub
+                    image: alpine/k8s:1.34.12
+                    shell: Bash
+                    command: |-
+                      H=$(find /harness -maxdepth 4 -name eval_history.sh 2>/dev/null | head -1)
+                      if [ -z "$H" ]; then echo "eval_history.sh not found under /harness"; exit 0; fi
+                      bash "$H"
+                    envVariables:
+                      HARNESS_API_KEY: <+secrets.getValue("harness_api_key_secret")>
+                      HARNESS_ACCOUNT: <+account.identifier>
+                      HARNESS_ORG: <+org.identifier>
+                      HARNESS_PROJECT: <+project.identifier>
+                      PIPELINE_ID: <+pipeline.identifier>
+                      EXECUTION_ID: <+pipeline.executionId>
+                      INCLUDE_AGENT_OUTPUT: "true"   # also store output.json and plan.md in the per-run bundle; set "false" if they are sensitive
+                      JUDGE_OVERALL: <+pipeline.stages.Preflight.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.JUDGE_OVERALL>
+                      JUDGE_FAILED: <+pipeline.stages.Preflight.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.JUDGE_FAILED>
+                      JUDGE_SUMMARY: <+pipeline.stages.Preflight.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.JUDGE_SUMMARY>
+                      EXPLANATION_SUMMARY: <+pipeline.stages.Preflight.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.EXPLANATION_SUMMARY>
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+                  when:
+                    stageStatus: All

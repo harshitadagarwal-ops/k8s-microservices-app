@@ -1,0 +1,16 @@
+{
+  "current_version": "1.34",
+  "score": {
+    "zone": "RED",
+    "initial": 0,
+    "projected": 0
+  },
+  "hops": [],
+  "top_blockers": [
+    "Scan incomplete"
+  ],
+  "findings": [],
+  "prs": [],
+  "pr_patches": [],
+  "support": {}
+}

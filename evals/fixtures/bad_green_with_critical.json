@@ -1,0 +1,61 @@
+{
+  "_note": "MOCK fixture. 'example.io/v1beta1' is a made-up API used only as a placeholder.",
+  "current_version": "1.34",
+  "score": {
+    "zone": "GREEN",
+    "initial": 71,
+    "projected": 88
+  },
+  "hops": [
+    {
+      "from": "1.34",
+      "to": "1.35",
+      "status": "OK",
+      "removed_apis": [],
+      "notes": ""
+    },
+    {
+      "from": "1.35",
+      "to": "1.36",
+      "status": "FLAGGED",
+      "removed_apis": [
+        "example.io/v1beta1"
+      ],
+      "notes": "Widget uses removed API"
+    }
+  ],
+  "top_blockers": [],
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "resource": "k8s/apps/widget.yaml",
+      "evidence": "apiVersion example.io/v1beta1 is removed in 1.36"
+    }
+  ],
+  "prs": [
+    {
+      "url": "https://github.com/example-org/k8s-microservices-app/pull/12"
+    }
+  ],
+  "pr_patches": [
+    {
+      "files": [
+        "k8s/apps/widget.yaml"
+      ]
+    }
+  ],
+  "support": {
+    "current": {
+      "status": "STANDARD",
+      "standard_end": "2027-01-01",
+      "extended_end": "2028-01-01"
+    },
+    "target": {
+      "status": "STANDARD",
+      "standard_end": "2027-06-01"
+    },
+    "monthly_fee_current": "$73",
+    "monthly_fee_target": "$73",
+    "urgency": "LOW"
+  }
+}

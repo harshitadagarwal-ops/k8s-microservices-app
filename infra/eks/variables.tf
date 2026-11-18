@@ -52,6 +52,12 @@ variable "node_desired_size" {
   default = 2
 }
 
+variable "cluster_admin_arns" {
+  type        = map(string)
+  default     = {}
+  description = "IAM principals that get cluster-admin (AmazonEKSClusterAdminPolicy) via EKS access entries. Key = short name used in the Terraform address."
+}
+
 variable "delegate_instance_types" {
   type = list(string)
   # On-Demand Graviton for the Harness delegate node. t4g.medium = 2 vCPU / 4 GiB,

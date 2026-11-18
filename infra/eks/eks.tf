@@ -28,8 +28,23 @@ module "eks" {
   create_cloudwatch_log_group            = false
   cluster_enabled_log_types              = []
 
-  # Let the creating IAM principal administer the cluster.
-  enable_cluster_creator_admin_permissions = true
+  # Cluster admins are listed explicitly (var.cluster_admin_arns). The module's
+  # "cluster creator" option is OFF on purpose: it grants admin only to whoever runs
+  # `terraform apply` and removes the previous person's entry, which locked a team
+  # member out of the cluster on 2026-11-18.
+  enable_cluster_creator_admin_permissions = false
+
+  access_entries = {
+    for name, arn in var.cluster_admin_arns : name => {
+      principal_arn = arn
+      policy_associations = {
+        admin = {
+          policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = { type = "cluster" }
+        }
+      }
+    }
+  }
 
   cluster_addons = {
     coredns    = {}
@@ -95,7 +110,7 @@ module "ebs_csi_irsa" {
 
   # "-v2": the original kube-pilot-ebs-csi role is orphaned in IAM (this user
   # can't delete or re-trust IAM roles), so rebuilds use a fresh role name.
-  role_name             = "${var.cluster_name}-ebs-csi-v3"
+  role_name             = "${var.cluster_name}-ebs-csi-v4"
   attach_ebs_csi_policy = true
 
   oidc_providers = {

@@ -1,0 +1,89 @@
+# Calibration pipeline: feeds a saved good/bad plan to the Eval Bot WITHOUT running the 3.5-minute Preflight agent.
+# Lets you (1) check the judge agrees with you, and (2) demo the judge live and fast.
+# Reuse the same codebase and infrastructure settings as your Preflight pipeline; replace the <placeholders>.
+pipeline:
+  name: judge_calibration
+  identifier: judge_calibration
+  projectIdentifier: Team_KubePilots
+  orgIdentifier: Worker_Agents_Hackathon
+  properties:
+    ci:
+      codebase:
+        connectorRef: k8smicroserviceapp
+        repoName: k8s-microservices-app
+        build: <+input>
+  stages:
+    - stage:
+        name: Judge Test
+        identifier: Judge_Test
+        type: CI
+        spec:
+          cloneCodebase: true
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: <+input>
+              namespace: harness-preflight
+              serviceAccountName: preflight-readonly
+              automountServiceAccountToken: true
+              nodeSelector: {}
+              os: Linux
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Load Fixture
+                  identifier: Load_Fixture
+                  timeout: 1m
+                  spec:
+                    connectorRef: dockerhub
+                    image: alpine/k8s:1.34.12
+                    shell: Bash
+                    command: |-
+                      set -eu
+                      G=$(find /harness -maxdepth 4 -name grade_output.py 2>/dev/null | head -1)
+                      if [ -z "$G" ]; then echo "evals/ folder not found under /harness"; ls /harness; exit 1; fi
+                      REPO_EVALS=$(dirname "$G")
+                      mkdir -p /harness/preflight
+                      cp "$REPO_EVALS/fixtures/judge/$CASE/output.json" /harness/preflight/output.json
+                      cp "$REPO_EVALS/fixtures/judge/$CASE/plan.md" /harness/preflight/plan.md
+                      echo "Loaded fixture: $CASE"
+                    envVariables:
+                      CASE: <+pipeline.variables.case>
+              - step:
+                  type: Agent
+                  name: Eval Bot
+                  identifier: Eval_Bot
+                  spec:
+                    agentName: ca_preflight_eval_bot
+                    agentSettings:
+                      llm_connector: kubepilots_avyka_anthropic_connector
+              - step:
+                  type: Run
+                  name: Show Verdict
+                  identifier: Show_Verdict
+                  timeout: 1m
+                  spec:
+                    connectorRef: dockerhub
+                    image: alpine/k8s:1.34.12
+                    shell: Bash
+                    command: |-
+                      echo "Case          : $CASE (expected: $EXPECTED)"
+                      echo "Judge verdict : $JUDGE_OVERALL"
+                      echo "Failed        : $JUDGE_FAILED"
+                      echo "Summary       : $JUDGE_SUMMARY"
+                      [ -s /harness/preflight/judge.json ] && jq . /harness/preflight/judge.json || true
+                    envVariables:
+                      CASE: <+pipeline.variables.case>
+                      EXPECTED: "good=PASS, bad_*=FAIL"
+                      JUDGE_OVERALL: <+pipeline.stages.Judge_Test.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.JUDGE_OVERALL>
+                      JUDGE_FAILED: <+pipeline.stages.Judge_Test.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.JUDGE_FAILED>
+                      JUDGE_SUMMARY: <+pipeline.stages.Judge_Test.spec.execution.steps.Eval_Bot.steps.ca_preflight_eval_bot_1.output.outputVariables.JUDGE_SUMMARY>
+                  when:
+                    stageStatus: All
+  variables:
+    - name: case
+      type: String
+      description: Which saved plan to judge
+      required: true
+      value: <+input>.allowedValues(good,bad_no_rollback,bad_invented_dates)

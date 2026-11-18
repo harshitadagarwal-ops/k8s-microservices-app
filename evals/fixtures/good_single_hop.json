@@ -1,0 +1,36 @@
+{
+  "_note": "MOCK fixture. Replace with a real output.json from a successful run.",
+  "current_version": "1.34",
+  "score": {
+    "zone": "GREEN",
+    "initial": 94,
+    "projected": 96
+  },
+  "hops": [
+    {
+      "from": "1.34",
+      "to": "1.35",
+      "status": "OK",
+      "removed_apis": [],
+      "notes": ""
+    }
+  ],
+  "top_blockers": [],
+  "findings": [],
+  "prs": [],
+  "pr_patches": [],
+  "support": {
+    "current": {
+      "status": "STANDARD",
+      "standard_end": "2027-01-01",
+      "extended_end": "2028-01-01"
+    },
+    "target": {
+      "status": "STANDARD",
+      "standard_end": "2027-06-01"
+    },
+    "monthly_fee_current": "$73",
+    "monthly_fee_target": "$73",
+    "urgency": "LOW"
+  }
+}
