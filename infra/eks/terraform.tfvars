@@ -1,6 +1,6 @@
 region          = "us-east-1"
 cluster_name    = "kube-pilot"
-cluster_version = "1.36"
+cluster_version = "1.33"
 vpc_cidr        = "10.0.0.0/16"
 
 # Graviton (ARM) + Spot node group. >=2 vCPU types only (delegate needs 1 CPU).
