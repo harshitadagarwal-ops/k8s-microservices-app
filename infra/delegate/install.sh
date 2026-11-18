@@ -20,17 +20,12 @@ MANAGER_ENDPOINT="https://app.harness.io"
 DELEGATE_IMAGE="us-docker.pkg.dev/gar-prod-setup/harness-public/harness/delegate:26.10.90208"
 DELEGATE_NAME="helm-delegate"
 NAMESPACE="harness-delegate-ng"
-# values.yaml pins the delegate to the On-Demand "delegate" node group (nodeSelector +
-# toleration) and sets org/project and resources. Without it, a plain `helm upgrade -i`
-# would reset those to chart defaults and put the delegate back on Spot nodes.
-VALUES_FILE="$(cd "$(dirname "$0")" && pwd)/values.yaml"
 
 helm repo add harness-delegate https://app.harness.io/storage/harness-download/delegate-helm-chart/ 2>/dev/null || true
 helm repo update harness-delegate
 
 helm upgrade -i "${DELEGATE_NAME}" harness-delegate/harness-delegate-ng \
   --namespace "${NAMESPACE}" --create-namespace \
-  -f "${VALUES_FILE}" \
   --set delegateName="${DELEGATE_NAME}" \
   --set accountId="${ACCOUNT_ID}" \
   --set delegateToken="${HARNESS_DELEGATE_TOKEN}" \

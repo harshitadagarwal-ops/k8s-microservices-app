@@ -1,6 +1,4 @@
-# F07: Legacy report client querying core/v1 Endpoints API every 5 minutes.
-# Endpoints API is deprecated in Kubernetes 1.33 in favor of discovery.k8s.io/v1 EndpointSlices.
-# Generates live warnings in apiserver_requested_deprecated_apis metric.
+# Report client querying discovery.k8s.io/v1 EndpointSlices API every 5 minutes.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -14,6 +12,7 @@ metadata:
 rules:
   - apiGroups: ["discovery.k8s.io"]
     resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -49,4 +48,4 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - kubectl get endpointslices.discovery.k8s.io. --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.name}{\" \"}{.subsets[*].addresses[*].ip}{\"\\n\"}{end}'"
+                - "kubectl get endpointslices.discovery.k8s.io --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.name}{\" \"}{.endpoints[*].addresses[*].ip}{\"\\n\"}{end}'"

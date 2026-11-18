@@ -14,13 +14,6 @@ node_min_size     = 2
 node_max_size     = 3
 node_desired_size = 2
 
-# Cluster admins (EKS access entries + AmazonEKSClusterAdminPolicy). Add teammates here;
-# whoever runs terraform does NOT get access automatically.
-cluster_admin_arns = {
-  harshita = "arn:aws:iam::105673693246:user/Harshita-Agarwal-Avyka"
-  pragati  = "arn:aws:iam::105673693246:user/Pragati-Saxena-Avyka"
-}
-
 # On-Demand node reserved for the Harness delegate (not affected by Spot reclaims).
 delegate_instance_types = ["t4g.medium"]
 

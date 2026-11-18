@@ -47,10 +47,17 @@ module "eks" {
   }
 
   cluster_addons = {
-    coredns    = {}
-    kube-proxy = {}
-    vpc-cni    = {}
+    coredns = {
+      addon_version = "v1.11.4-eksbuild.2"
+    }
+    kube-proxy = {
+      addon_version = "v1.36.0-eksbuild.65"
+    }
+    vpc-cni = {
+      addon_version = "v1.22.4-eksbuild.14"
+    }
     aws-ebs-csi-driver = {
+      addon_version            = "v1.68.0-eksbuild.1"
       service_account_role_arn = module.ebs_csi_irsa.iam_role_arn
     }
   }

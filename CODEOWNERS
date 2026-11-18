@@ -1,0 +1,33 @@
+# ==============================================================================
+# CODEOWNERS for Kubernetes Microservices Demo Estate
+# Maps paths and components to designated owners to satisfy preflight audit
+# ==============================================================================
+
+# Default fallback owner for all repositories and cluster platform files
+*                                           @platform-team
+
+# Three-tier Helm chart (demo, mysql, default namespaces)
+/charts/three-tier/                         @app-team @platform-team
+/charts/three-tier/templates/               @app-team
+/charts/three-tier/values*.yaml             @platform-team
+
+# Application source code
+/frontend/                                  @frontend-team
+/backend/                                   @backend-team
+
+# Platform components (argocd, reporting, flowcontrol)
+/platform/                                  @platform-team
+/platform/argocd-install/                   @platform-team
+/platform/flowcontrol/                      @platform-team
+/platform/service-inventory/                @reporting-team @platform-team
+
+# GitOps and Argo CD Applications (cert-manager, ingress-nginx, argocd)
+/argocd/                                    @platform-team
+/gitops/                                    @platform-team
+
+# Infrastructure as Code (EKS, GKE, AKS)
+/infra/                                     @infra-team
+/infra/eks/                                 @infra-team
+/infra/gke/                                 @infra-team
+/infra/aks/                                 @infra-team
+/onprem/                                    @platform-team
