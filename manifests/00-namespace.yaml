@@ -1,6 +1,6 @@
 # A Namespace logically groups all resources for this demo.
 # Everything below lives in the "demo" namespace.
-apiVersion: apps/v1
+apiVersion: v1
 kind: Namespace
 metadata:
   name: demo
