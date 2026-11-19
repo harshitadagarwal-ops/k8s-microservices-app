@@ -1,0 +1,27 @@
+{{- if .Values.podSecurityPolicy.enabled -}}
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: three-tier-mysql
+  labels:
+    app: mysql
+    {{- include "three-tier.labels" . | nindent 4 }}
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  runAsUser:
+    rule: MustRunAsNonRoot
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: RunAsAny
+  fsGroup:
+    rule: MustRunAs
+    ranges:
+      - min: 999
+        max: 999
+  volumes:
+    - persistentVolumeClaim
+    - secret
+    - configMap
+{{- end }}
