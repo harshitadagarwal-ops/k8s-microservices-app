@@ -1,0 +1,88 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.33 to 1.37</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan dzcLcE0JRE-kWk_LgrW37g</p>
+<p><span class=zAMBER>AMBER</span> readiness 47 now, 62 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.34</td><td>OK</td><td>No removed-API findings from the deprecation map land on this hop. Control plane only; nodes stay on 1.33 (skew 1).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.35</td><td>OK</td><td>No removed-API findings land on this hop. Roll node pools to 1.35 right after this hop (see node_hops) to bring skew back to 0 before continuing.</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.36</td><td>OK</td><td>No removed-API findings land on this hop. Nodes at 1.35 (skew 1).</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.37</td><td>OK</td><td>Target version. No removed-API findings land on this hop. Roll node pools to 1.37 to close skew to 0. Re-run Preflight after the PR in this run is merged and the podsecuritypolicy.yaml / podsecuritypolicy-mysql.yaml templates are resolved by a human.</td><td><a href=https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.33 (no change, stays behind control plane)</td><td>EKS/Kubernetes version-skew policy allows the kubelet to run up to 3 minor versions behind kube-apiserver; this plan reconciles nodes twice and keeps the actual gap to at most 2 minors at any point. Hold node pools at 1.33 through the 1.34 control-plane hop.</td></tr><tr><td>1.35</td><td>EKS/Kubernetes version-skew policy allows the kubelet to run up to 3 minor versions behind kube-apiserver; this plan reconciles nodes twice and keeps the actual gap to at most 2 minors at any point. Roll node pools general-* and delegate-* from 1.33 to 1.35 after the control plane reaches 1.35, closing skew to 0.</td></tr><tr><td>1.37</td><td>EKS/Kubernetes version-skew policy allows the kubelet to run up to 3 minor versions behind kube-apiserver; this plan reconciles nodes twice and keeps the actual gap to at most 2 minors at any point. Roll node pools from 1.35 to 1.37 after the control plane reaches 1.37, closing skew to 0.</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>PodSecurityPolicy (policy/v1beta1) still referenced in podsecuritypolicy.yaml and podsecuritypolicy-mysql.yaml - removed in 1.25 with no replacement API; needs human migration to Pod Security Admission or an admission-controller policy before these templates are ever reapplied</li><li>Live cluster client still requests core v1 Endpoints - Kubernetes recommends moving to EndpointSlice (not yet scheduled for removal upstream, monitor only)</li><li>IRSA / EKS Pod Identity annotations were not in the collected scan facts - the platform prerequisite check for prod-eks is ASSUMED, not verified</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>extensions/v1beta1 Ingress in charts/three-tier/templates/admin-ingress.yaml (removed in 1.22)</td><td>15</td><td>yes</td></tr><tr><td>autoscaling/v2beta1 HorizontalPodAutoscaler in charts/three-tier/templates/backend-hpa.yaml (removed in 1.25)</td><td>15</td><td>yes</td></tr><tr><td>autoscaling/v2beta2 HorizontalPodAutoscaler in charts/three-tier/templates/frontend-hpa.yaml (removed in 1.26)</td><td>15</td><td>yes</td></tr><tr><td>policy/v1beta1 PodDisruptionBudget in charts/three-tier/templates/backend-pdb.yaml (removed in 1.25)</td><td>15</td><td>yes</td></tr><tr><td>policy/v1beta1 PodDisruptionBudget in charts/three-tier/templates/mysql-pdb.yaml (removed in 1.25)</td><td>15</td><td>yes</td></tr><tr><td>batch/v1beta1 CronJob in charts/three-tier/templates/mysql-backup-cronjob.yaml (removed in 1.25)</td><td>15</td><td>yes</td></tr><tr><td>policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy.yaml (removed in 1.25, no replacement apiVersion) - needs human review</td><td>15</td><td>no</td></tr><tr><td>policy/v1beta1 PodSecurityPolicy in charts/three-tier/templates/podsecuritypolicy-mysql.yaml (removed in 1.25, no replacement apiVersion) - needs human review</td><td>15</td><td>no</td></tr><tr><td>live cluster: core v1 Endpoints API still requested by a client (deprecated_apis.json), Kubernetes recommends EndpointSlice; no removal release set by upstream yet</td><td>3</td><td>no</td></tr><tr><td>coverage gap: service-account IAM role annotations (IRSA/Pod Identity) were not in the collected scan facts, so the EKS platform prerequisite check is ASSUMED only</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>EXTENDED</td><td>2026-07-29</td><td>2027-07-29</td></tr><tr><td>target</td><td>STANDARD</td><td>2027-12-01</td><td>2028-12-01</td></tr></table><p>Urgency: CRITICAL</p>
+<h2>Coverage gaps</h2><ul><li>needs scan (read only): service-account IAM role annotations (IRSA/Pod Identity) for the EKS platform prerequisite check</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade readiness: 1.33 -&gt; 1.37 (EKS, prod-eks, cluster kube-pilot)
+
+## Readiness
+ZONE: AMBER. Initial score 47/100, projected 62/100 after the fixes in this PR.
+Nothing blocks the hop plan outright, but two repo findings need a human decision and
+one platform check could not be verified from the collected scan facts.
+
+## Control plane hops (every minor, VERIFIED against cluster_version.json = v1.33.13-eks)
+| To | Status | Notes |
+|---|---|---|
+| 1.34 | OK | No removed-API findings from the deprecation map land on this hop. |
+| 1.35 | OK | No removed-API findings land on this hop. Roll node pools to 1.35 right after. |
+| 1.36 | OK | No removed-API findings land on this hop. Nodes at 1.35 (skew 1). |
+| 1.37 | OK | Target. Roll node pools to 1.37 to close skew to 0. Re-run Preflight once the PodSecurityPolicy templates are resolved by a human. |
+
+Release notes: https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html (per hop).
+
+## Node pool hops (ASSUMED skew limit: EKS/Kubernetes allows kubelet up to 3 minors behind kube-apiserver)
+All 3 nodes currently report kubelet v1.33.13 (VERIFIED, nodes.json), matching the control plane.
+Plan keeps the actual gap to at most 2 minors and reconciles twice instead of every hop:
+| To | Notes |
+|---|---|
+| 1.33 (hold) | Hold through the 1.34 control-plane hop. |
+| 1.35 | Roll general-* and delegate-* node pools after control plane reaches 1.35. |
+| 1.37 | Roll node pools after control plane reaches 1.37. |
+
+## Platform checks (EKS) - ASSUMED unless noted
+- IRSA / Pod Identity: ASSUMED - service-account IAM annotations were not in the collected scan
+  facts (coverage gap, 5 pts).
+- Node OS/runtime: VERIFIED - Amazon Linux 2023, containerd 2.3.7 on all 3 nodes (nodes.json);
+  no known incompatibility with 1.34-1.37.
+- Core add-ons (VERIFIED from addons.json): aws-load-balancer-controller v2.8.1, VPC CNI
+  (amazon-k8s-cni) v1.22.4, aws-network-policy-agent v1.4.0, CoreDNS v1.12.4, EBS CSI driver
+  v1.68.0, kube-proxy v1.33.10. No incompatibility confirmed from the scan; this run did not fetch
+  release notes to cross-check add-on compatibility, so treat as ASSUMED-OK pending the vendor&#x27;s
+  own add-on-version documentation before each hop.
+- CRDs (VERIFIED from crds.json): 9 AWS-VPC-CNI/ELB CRDs, all at v1alpha1/v1beta1 custom (non-core)
+  versions - not covered by the core Kubernetes deprecation guide, no finding.
+
+## Repo findings and fixes (VERIFIED from grep of the cloned repo k8s-microservices-app)
+Fixed in this PR (apiVersion swap only, per the deprecation guide&#x27;s named replacement):
+- charts/three-tier/templates/admin-ingress.yaml: extensions/v1beta1 -&gt; networking.k8s.io/v1 (Ingress, removed 1.22)
+- charts/three-tier/templates/backend-hpa.yaml: autoscaling/v2beta1 -&gt; autoscaling/v2 (HPA, removed 1.25)
+- charts/three-tier/templates/frontend-hpa.yaml: autoscaling/v2beta2 -&gt; autoscaling/v2 (HPA, removed 1.26)
+- charts/three-tier/templates/backend-pdb.yaml: policy/v1beta1 -&gt; policy/v1 (PDB, removed 1.25)
+- charts/three-tier/templates/mysql-pdb.yaml: policy/v1beta1 -&gt; policy/v1 (PDB, removed 1.25)
+- charts/three-tier/templates/mysql-backup-cronjob.yaml: batch/v1beta1 -&gt; batch/v1 (CronJob, removed 1.25)
+
+Needs human review (NOT patched - the deprecation guide names no replacement apiVersion):
+- charts/three-tier/templates/podsecuritypolicy.yaml and podsecuritypolicy-mysql.yaml:
+  policy/v1beta1 PodSecurityPolicy, removed in 1.25. Recommend Pod Security Admission labels or an
+  OPA/Gatekeeper/Kyverno policy, then delete these templates.
+
+Live cluster (VERIFIED from deprecated_apis.json): a client still requests core v1 Endpoints.
+Kubernetes recommends EndpointSlice; upstream has not set a removal release for this, so it is
+scored as deprecated-but-not-removed only (monitor, no action required before 1.37).
+
+Owners to warn: CODEOWNERS was not found in k8s-microservices-app, so owners are unknown - route
+the PR to whoever maintains charts/three-tier.
+
+## Support status (VERIFIED from https://endoflife.date/api/amazon-eks.json)
+- Current 1.33: status EXTENDED (standard support ended 2026-07-29; extended support ends 2027-07-29).
+- Target 1.37: status STANDARD (standard support ends 2027-12-01; extended support ends 2028-12-01).
+- Urgency: CRITICAL - standard support for 1.33 has already ended. Fees: UNKNOWN (no official fee
+  page was fetched this run).
+
+## Coverage gaps
+- needs scan (read only): service-account IAM role annotations (IRSA/Pod Identity) for the EKS
+  platform prerequisite check.
+
+## Maps
+- Deprecation map: configured path /harness/preflight-config/deprecation-map.json was absent;
+  generated from https://kubernetes.io/docs/reference/using-api/deprecation-guide/ (37 entries).
+- App-repo map: configured path /harness/preflight-config/app-repo-map.json was absent; generated
+  from the cloned repo&#x27;s manifests and CODEOWNERS (7 namespaces, owners unknown).
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
