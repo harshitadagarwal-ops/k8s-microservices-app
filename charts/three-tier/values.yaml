@@ -69,3 +69,5 @@ ingress:
   tls:
     enabled: false
     clusterIssuer: ""
+podSecurityPolicy:
+  enabled: false
