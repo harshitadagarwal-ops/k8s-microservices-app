@@ -4,4 +4,3 @@ kind: Kustomization
 resources:
   - flowcontrol.yaml
   - legacy-endpoints-cronjob.yaml
-  - podsecuritypolicy.yaml

@@ -5,4 +5,3 @@ resources:
   - namespace.yaml
   - rbac.yaml
   - cronjob.yaml
-  - podsecuritypolicy.yaml
