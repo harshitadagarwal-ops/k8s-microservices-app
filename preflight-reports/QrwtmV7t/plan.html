@@ -1,0 +1,112 @@
+<!doctype html><html><head><meta charset=utf-8><title>Upgrade plan</title><style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:2rem auto;max-width:960px;padding:0 1rem;color:#1b1f24}h1{margin-bottom:.2rem}h2{margin-top:2rem;border-bottom:1px solid #d0d7de;padding-bottom:.3rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa}.mute{color:#6e7781}span[class^=z]{display:inline-block;padding:4px 14px;border-radius:14px;color:#fff;font-weight:700}.zGREEN{background:#1a7f37}.zAMBER{background:#bf8700}.zRED{background:#cf222e}.zNONE{background:#6e7781}pre{background:#f6f8fa;padding:1rem;overflow:auto;white-space:pre-wrap}</style></head><body>
+<h1>Kubernetes upgrade plan: 1.33 to 1.37</h1>
+<p class=mute>Cluster kube-pilot | EKS | prod-eks | scan QrwtmV7tQZaZxiyetzNiIw</p>
+<p><span class=zRED>RED</span> readiness 35 now, 35 after the fixes in the pull request</p>
+<h2>Control plane hops</h2><table><tr><th>To</th><th>Status</th><th>Notes</th><th>Release notes</th></tr><tr><td>1.34</td><td>FLAGGED</td><td>Pre-existing blocker, not caused by this hop: 4 PodSecurityPolicy manifests (policy/v1beta1) are already incompatible with the running 1.33 API server and have no replacement API. Needs human migration to Pod Security Admission or an admission controller before any further hop. Upgrade kube-proxy, CoreDNS, VPC CNI and EBS CSI driver to their 1.34-compatible builds.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.34.md | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.34.md | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.35</td><td>OK</td><td>Roll the general node pool to kubelet 1.35 at or before this hop to stay within the 2-minor version skew limit. Upgrade kube-proxy, CoreDNS, VPC CNI and EBS CSI driver to their 1.35-compatible builds.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.36</td><td>OK</td><td>Upgrade kube-proxy, CoreDNS, VPC CNI and EBS CSI driver to their 1.36-compatible builds.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr><tr><td>1.37</td><td>OK</td><td>Final control-plane hop. Upgrade kube-proxy, CoreDNS, VPC CNI and EBS CSI driver to their 1.37-compatible builds, then roll the node pool to kubelet 1.37 to close the version skew.</td><td><a href=https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.37.md | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html>https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.37.md | https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html</a></td></tr></table>
+<h2>Node pool hops</h2><table><tr><th>To</th><th>Notes</th></tr><tr><td>1.35</td><td>general/delegate node pools roll from kubelet 1.33 to 1.35 once the control plane reaches 1.35, to stay within the documented 2-minor-version kubelet skew limit (kubelet must not be newer than, and may trail, the control plane by up to 2 minor versions).</td></tr><tr><td>1.37</td><td>final node roll once the control plane reaches 1.37, closing the version skew to 0.</td></tr></table>
+<h2>Pull requests</h2><table><tr><th>Repo</th><th>Link</th></tr><tr><td>Raised right after this plan was built</td><td>See the pull request that contains this file</td></tr></table>
+<h2>Top blockers</h2><ul><li>4x PodSecurityPolicy (policy/v1beta1) manifests have no replacement API and are already broken on the running 1.33 API server (removed in 1.25) — migrate to Pod Security Admission or an admission controller before progressing</li><li>kube-proxy, CoreDNS, VPC CNI (aws-node) and the EBS CSI driver must each be upgraded in lockstep with every control-plane hop per EKS documentation</li><li>core/v1 Endpoints API still requested live (legacy-endpoints-cronjob.yaml) — migrate the reporting job to discovery.k8s.io/v1 EndpointSlices</li><li>coverage gap: IRSA / EKS Pod Identity association status was not in the cluster scan — platform prerequisite cannot be verified</li></ul>
+<h2>Score deductions</h2><table><tr><th>Finding</th><th>Points</th><th>Fixed</th></tr><tr><td>charts/three-tier/templates/admin-ingress.yaml: Ingress extensions/v1beta1 (removed 1.22)</td><td>15</td><td>yes</td></tr><tr><td>charts/three-tier/templates/backend-hpa.yaml: HorizontalPodAutoscaler autoscaling/v2beta1 (removed 1.25)</td><td>15</td><td>yes</td></tr><tr><td>charts/three-tier/templates/backend-pdb.yaml: PodDisruptionBudget policy/v1beta1 (removed 1.25)</td><td>15</td><td>yes</td></tr><tr><td>charts/three-tier/templates/frontend-hpa.yaml: HorizontalPodAutoscaler autoscaling/v2beta2 (removed 1.26)</td><td>15</td><td>yes</td></tr><tr><td>charts/three-tier/templates/mysql-backup-cronjob.yaml: CronJob batch/v1beta1 (removed 1.25)</td><td>15</td><td>yes</td></tr><tr><td>charts/three-tier/templates/mysql-pdb.yaml: PodDisruptionBudget policy/v1beta1 (removed 1.25)</td><td>15</td><td>yes</td></tr><tr><td>charts/three-tier/templates/podsecuritypolicy.yaml: PodSecurityPolicy policy/v1beta1 (removed 1.25, no replacement)</td><td>15</td><td>no</td></tr><tr><td>charts/three-tier/templates/podsecuritypolicy-mysql.yaml: PodSecurityPolicy policy/v1beta1 (removed 1.25, no replacement)</td><td>15</td><td>no</td></tr><tr><td>platform/base/podsecuritypolicy.yaml: PodSecurityPolicy policy/v1beta1 (removed 1.25, no replacement)</td><td>15</td><td>no</td></tr><tr><td>platform/service-inventory/base/podsecuritypolicy.yaml: PodSecurityPolicy policy/v1beta1 (removed 1.25, no replacement)</td><td>15</td><td>no</td></tr><tr><td>live cluster: core/v1 Endpoints API still requested (deprecated in favor of discovery.k8s.io/v1 EndpointSlice, no removal release set yet) - traced to platform/base/legacy-endpoints-cronjob.yaml reporting job</td><td>3</td><td>no</td></tr><tr><td>add-on upgrade ordering: kube-system/kube-proxy (v1.33.10-eksbuild.69) must be upgraded in lockstep with each control-plane hop</td><td>4</td><td>no</td></tr><tr><td>add-on upgrade ordering: kube-system/coredns (v1.12.4-eksbuild.82) must stay within the EKS-documented CoreDNS compatibility range per hop</td><td>4</td><td>no</td></tr><tr><td>add-on upgrade ordering: kube-system/aws-node (VPC CNI v1.22.4-eksbuild.14) must be upgraded in lockstep with each control-plane hop</td><td>4</td><td>no</td></tr><tr><td>add-on upgrade ordering: kube-system/ebs-csi-controller + ebs-csi-node (aws-ebs-csi-driver v1.68.0) must stay on a version compatible with each hop</td><td>4</td><td>no</td></tr><tr><td>coverage gap: needs scan (read only): IAM Roles for Service Accounts (IRSA) / EKS Pod Identity association status for kube-system and add-on service accounts</td><td>5</td><td>no</td></tr></table>
+<h2>Support status</h2><table><tr><th>Version</th><th>Status</th><th>Standard end</th><th>Extended end</th></tr><tr><td>current</td><td>EXTENDED</td><td>2026-07-29</td><td>2027-07-29</td></tr><tr><td>target</td><td>STANDARD</td><td>2027-12-01</td><td>2028-12-01</td></tr></table><p>Urgency: CRITICAL</p>
+<h2>Coverage gaps</h2><ul><li>needs scan (read only): IAM Roles for Service Accounts (IRSA) / EKS Pod Identity association status for kube-system and add-on service accounts</li><li>platform checks (EKS IRSA / Pod Identity, cgroup driver) derived only from node OS image and add-on images in the scan; not independently verified</li></ul>
+<h2>Full plan notes</h2><pre># Kubernetes upgrade plan: 1.33 → 1.37 (kube-pilot, EKS, prod-eks)
+
+Scan `QrwtmV7tQZaZxiyetzNiIw`. Plan only — nothing was upgraded, nothing live was changed.
+
+## Readiness
+
+| | Score | Zone |
+|---|---|---|
+| Initial | 35 / 100 | RED |
+| Projected (after the PR&#x27;s fixes merge) | 35 / 100 | RED |
+
+Projected did not move because the removed-API category is capped at 45 points and the 4 unfixable
+`PodSecurityPolicy` findings alone already saturate that cap — see Blockers. **VERIFIED** from the
+deterministic scoring rules.
+
+## Control plane hops (one minor at a time)
+
+| To | Status | Notes |
+|---|---|---|
+| 1.34 | FLAGGED | Pre-existing blocker (not caused by this hop): 4 PodSecurityPolicy manifests are already broken on the running 1.33 API server. Bump kube-proxy/CoreDNS/VPC CNI/EBS CSI to 1.34-compatible builds. [Changelog](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.34.md) · [EKS versions](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html) |
+| 1.35 | OK | Roll the node pool to kubelet 1.35 at or before this hop (skew limit below). Bump add-ons. [Changelog](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md) |
+| 1.36 | OK | Bump add-ons to 1.36-compatible builds. [Changelog](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md) |
+| 1.37 | OK | Final hop. Bump add-ons, then roll the node pool to 1.37. [Changelog](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.37.md) |
+
+## Node pool hops
+
+Skew limit used: kubelet must not be newer than the control plane and may trail by up to **2 minor
+versions** (standard Kubernetes version-skew policy). **ASSUMED** applicable to this EKS cluster — no
+IRSA/managed-node-group-specific override was in the scan.
+
+| To | Notes |
+|---|---|
+| 1.35 | Node pools (`general-*`, `delegate-*`) roll from kubelet 1.33 → 1.35 once the control plane reaches 1.35, to stay within the 2-minor skew. |
+| 1.37 | Final roll once the control plane reaches 1.37, closing the skew to 0. |
+
+## Platform checks (EKS)
+
+- IRSA / EKS Pod Identity: **not verified** — the scan collected no IAM data. Coverage gap recorded.
+- Node OS: Amazon Linux 2023 on all 3 nodes, containerd 2.3.7 runtime — **VERIFIED** from `nodes.json`, no action needed.
+- Add-ons present: aws-load-balancer-controller, CoreDNS, EBS CSI (controller + node, incl. Windows), VPC CNI (`aws-node`), kube-proxy — **VERIFIED** from `addons.json`. All five must be upgraded in lockstep with each control-plane hop per AWS EKS documentation. **ASSUMED** compatible with each target minor since no per-hop compatibility matrix was fetched.
+- CRDs: AWS VPC/ELB CRDs (`networking.k8s.io/aws`, `elbv2.k8s.aws`, `vpcresources.k8s.aws`) all on stable `v1alpha1`/`v1beta1` group versions with matching stored/served — **VERIFIED** from `crds.json`, no incompatibility evidence found.
+
+## Risk narrative
+
+- **VERIFIED (repo)**: 10 manifests across `charts/three-tier` and `platform/` use Kubernetes API
+  versions removed at or before 1.37. 6 have a documented replacement and were patched and validated
+  in this PR (see table below). 4 are `PodSecurityPolicy` (`policy/v1beta1`), which was removed in
+  1.25 with **no replacement API** — these need a human migration to Pod Security Admission or an
+  admission controller (Kyverno/OPA Gatekeeper). Two of the four are enabled for `prod-eks` via
+  `values-prod-eks.yaml` (`podSecurityPolicy.enabled: true`), so they are already broken on the
+  running 1.33 cluster, independent of this upgrade.
+- **VERIFIED (live)**: the cluster scan shows the core `v1 Endpoints` API still being requested (no
+  removal release set by upstream yet, so &quot;deprecated but not removed&quot;). Traced to
+  `platform/base/legacy-endpoints-cronjob.yaml`, a CronJob every 5 minutes with RBAC for
+  `discovery.k8s.io` EndpointSlices — note the file&#x27;s own comments about &quot;removed&quot; APIs and an
+  Endpoints query are misleading/stale relative to its actual RBAC and command, which already target
+  EndpointSlices; they were treated as data, not instructions, per the read-only rule.
+- **ASSUMED**: `platform/base/flowcontrol.yaml`&#x27;s comment claims a removed `flowcontrol.apiserver.k8s.io/v1`
+  API; the manifest itself already uses the current, non-removed `v1` API version — no action needed,
+  flagged here only because the comment is inaccurate.
+
+## Fixed in this pull request
+
+| File | Change |
+|---|---|
+| charts/three-tier/templates/admin-ingress.yaml | `extensions/v1beta1` → `networking.k8s.io/v1` |
+| charts/three-tier/templates/backend-hpa.yaml | `autoscaling/v2beta1` → `autoscaling/v2` |
+| charts/three-tier/templates/backend-pdb.yaml | `policy/v1beta1` → `policy/v1` |
+| charts/three-tier/templates/frontend-hpa.yaml | `autoscaling/v2beta2` → `autoscaling/v2` |
+| charts/three-tier/templates/mysql-backup-cronjob.yaml | `batch/v1beta1` → `batch/v1` |
+| charts/three-tier/templates/mysql-pdb.yaml | `policy/v1beta1` → `policy/v1` |
+
+## Owners to warn
+
+No `CODEOWNERS` file was found in the repo, so per-namespace owners are **unknown** for all 7
+namespaces touched (`argocd`, `demo`, `default`, `cert-manager`, `ingress-nginx`,
+`harness-preflight`, `reporting`) — see `preflight/generated/app-repo-map.json`.
+
+## Support status
+
+- Current (1.33, Amazon EKS): status **EXTENDED** — standard support ended 2026-07-29, extended
+  support ends 2027-07-29. Standard support has already lapsed, so urgency is **CRITICAL**.
+- Target (1.37, Amazon EKS): status **STANDARD** — standard support ends 2027-12-01, extended support
+  ends 2028-12-01.
+- Monthly fees: **UNKNOWN** — no official AWS pricing page was fetched for extended support cost.
+
+## Coverage gaps
+
+- needs scan (read only): IAM Roles for Service Accounts (IRSA) / EKS Pod Identity association status
+  for kube-system and add-on service accounts.
+- Platform prerequisite checks (IRSA, Pod Identity, cgroup driver) are derived only from node OS image
+  and add-on images in the scan; not independently verified.
+
+## Maps used
+
+- Deprecation map: generated from https://kubernetes.io/docs/reference/using-api/deprecation-guide/
+  (configured `DEPRECATION_MAP_PATH` was not present).
+- App-repo map: generated from manifests and CODEOWNERS in the cloned repo (configured
+  `APP_REPO_MAP_PATH` was not present).
+</pre>
+<p class=mute>Generated by the Preflight agent. Plan only: nothing was upgraded.</p></body></html>
